@@ -1,0 +1,102 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isOwner(id) { return signedIn() && request.auth.uid == id; }
+    // المدير الوحيد
+    function isSuper() {
+      return signedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email.lower() == 'wsx67hb@gmail.com';
+    }
+
+    // الحساب فعّال: لا يوجد سجل حالة، أو مفعّل ولم ينتهِ اشتراكه
+    function statusOk(id) {
+      return !exists(/databases/$(database)/documents/student_status/$(id))
+        || (get(/databases/$(database)/documents/student_status/$(id)).data.get('isApproved', true) != false
+            && (get(/databases/$(database)/documents/student_status/$(id)).data.get('expiresAt', null) == null
+                || get(/databases/$(database)/documents/student_status/$(id)).data.get('expiresAt', null) > request.time));
+    }
+    // صاحب الحساب وهو فعّال (المدير مستثنى دائماً)
+    function ownerOk(id) { return isOwner(id) && (isSuper() || statusOk(id)); }
+
+    // حالة التفعيل والاشتراك: الطالب يقرأ حالته فقط، والكتابة للمدير فقط
+    match /student_status/{id} {
+      allow read: if isOwner(id) || isSuper();
+      allow write: if isSuper();
+    }
+
+    // ملف الطالب: صاحبه وهو فعّال. والمدير يقرأ القائمة (بدون أي بيانات مرضى)
+    match /students/{id} {
+      allow read: if ownerOk(id) || isSuper();
+      allow write: if ownerOk(id);
+    }
+
+    // حالات الطالب (بيانات المرضى): صاحبها فقط وهو فعّال. حتى المدير لا يقرأها
+    match /cases/{caseId} {
+      allow read, delete: if signedIn() && resource.data.studentId == request.auth.uid
+                          && (isSuper() || statusOk(request.auth.uid));
+      allow create: if signedIn() && request.resource.data.studentId == request.auth.uid
+                    && (isSuper() || statusOk(request.auth.uid));
+      allow update: if signedIn() && resource.data.studentId == request.auth.uid
+                    && request.resource.data.studentId == request.auth.uid
+                    && (isSuper() || statusOk(request.auth.uid));
+    }
+
+    // صور الحالات: مصغّرة (للشبكة) ونسخة كاملة تُحمَّل عند الضغط. صاحبها فقط وهو فعّال
+    match /case_photos/{id} {
+      allow read, delete: if signedIn() && resource.data.studentId == request.auth.uid
+                          && (isSuper() || statusOk(request.auth.uid));
+      allow create: if signedIn() && request.resource.data.studentId == request.auth.uid
+                    && (isSuper() || statusOk(request.auth.uid))
+                    && request.resource.data.thumb is string && request.resource.data.thumb.size() < 80000;
+      allow update: if false;
+    }
+    match /case_photos_full/{id} {
+      allow read, delete: if signedIn() && resource.data.studentId == request.auth.uid
+                          && (isSuper() || statusOk(request.auth.uid));
+      allow create: if signedIn() && request.resource.data.studentId == request.auth.uid
+                    && (isSuper() || statusOk(request.auth.uid))
+                    && request.resource.data.data is string && request.resource.data.data.size() < 950000;
+      allow update: if false;
+    }
+
+    // نسخة عامة محدودة لصفحة الحجز. الحساب الموقوف أو المنتهي ينغلق رابط حجزه
+    match /public_students/{id} {
+      allow get: if statusOk(id);
+      allow list: if false;
+      allow write: if ownerOk(id)
+        && request.resource.data.keys().hasOnly(['name','university','updatedAt'])
+        && request.resource.data.name is string && request.resource.data.name.size() < 100
+        && request.resource.data.university is string && request.resource.data.university.size() < 150;
+    }
+
+    // الأوقات المحجوزة (بدون بيانات شخصية). الإنشاء فقط
+    match /public_slots/{slotId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasOnly(['studentId','date','time'])
+        && request.resource.data.studentId is string
+        && request.resource.data.date is string && request.resource.data.date.size() < 20
+        && request.resource.data.time is string && request.resource.data.time.size() < 20
+        && exists(/databases/$(database)/documents/public_students/$(request.resource.data.studentId))
+        && statusOk(request.resource.data.studentId);
+      allow delete: if ownerOk(resource.data.studentId);
+    }
+
+    // طلبات الحجز: أي شخص يرسل طلب، والطالب صاحبها فقط يقراها ويحذفها
+    match /public_bookings/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['studentId','name','phone','date','time','note','createdAt'])
+        && request.resource.data.studentId is string
+        && request.resource.data.name is string && request.resource.data.name.size() < 100
+        && request.resource.data.phone is string && request.resource.data.phone.size() < 30
+        && request.resource.data.date is string && request.resource.data.date.size() < 20
+        && request.resource.data.time is string && request.resource.data.time.size() < 20
+        && request.resource.data.note is string && request.resource.data.note.size() < 500
+        && request.resource.data.createdAt is string
+        && exists(/databases/$(database)/documents/public_students/$(request.resource.data.studentId))
+        && statusOk(request.resource.data.studentId);
+      allow read, delete: if ownerOk(resource.data.studentId);
+    }
+  }
+}
