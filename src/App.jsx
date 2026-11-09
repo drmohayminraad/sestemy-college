@@ -1,4 +1,5 @@
 import { Component, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { auth, db } from './firebase';
 import {
   onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -61,9 +62,10 @@ const ICONS = {
   users: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6" /><circle cx="17" cy="9" r="2.5" /><path d="M17 14c2.5 0 4.5 1.8 4.5 4.5" /></>,
   calendar: <><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M8 3v4M16 3v4M3 11h18" /></>,
   book: <><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" /><path d="M4 19V5M9 7h6" /></>,
-  gear: <><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1" /></>,
+  gear: <><path d="M10.27 4.80 L10.71 1.78 L13.29 1.78 L13.73 4.80 L15.87 5.69 L18.31 3.86 L20.14 5.69 L18.31 8.13 L19.20 10.27 L22.22 10.71 L22.22 13.29 L19.20 13.73 L18.31 15.87 L20.14 18.31 L18.31 20.14 L15.87 18.31 L13.73 19.20 L13.29 22.22 L10.71 22.22 L10.27 19.20 L8.13 18.31 L5.69 20.14 L3.86 18.31 L5.69 15.87 L4.80 13.73 L1.78 13.29 L1.78 10.71 L4.80 10.27 L5.69 8.13 L3.86 5.69 L5.69 3.86 L8.13 5.69 Z" /><circle cx="12" cy="12" r="3.2" /></>,
   pulse: <path d="M3 12h4l3-8 4 16 3-8h4" />,
   plus: <path d="M12 5v14M5 12h14" />,
+  box: <><path d="M21 8l-9-5-9 5v8l9 5 9-5z" /><path d="M3 8l9 5 9-5M12 13v8" /></>,
   shield: <><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" /><path d="M9 12l2 2 4-4" /></>,
 };
 function Icon({ name }) {
@@ -486,7 +488,7 @@ function Odontogram({ dent, teeth, selected, onPick }) {
           {cond === 'fractured' && <path d="M-9 -15L-2 -3L-9 4L1 16" fill="none" stroke={cd.color} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />}
           {cond === 'extract' && <path d="M-15 -15L15 15M15 -15L-15 15" stroke={cd.color} strokeWidth="5" strokeLinecap="round" />}
           {sel && <rect x={-w / 2 - 6} y={-h / 2 - 6} width={w + 12} height={h + 12} rx={r + 5} fill="none" stroke="var(--brand)" strokeWidth="4" />}
-          {t && t.notes ? <circle cx={w / 2 - 4} cy={-h / 2 + 4} r="6" fill="var(--brand)" stroke="#fff" strokeWidth="2" /> : null}
+          {t && hasToothInfo(t) ? <circle cx={w / 2 - 4} cy={-h / 2 + 4} r="6" fill="var(--brand)" stroke="#fff" strokeWidth="2" /> : null}
         </g>
       </g>
     );
@@ -512,18 +514,114 @@ function Odontogram({ dent, teeth, selected, onPick }) {
   );
 }
 
+/* ---------- ملخص تفاصيل السن (قنوات / حشوات) ---------- */
+const CANAL_SUGGEST = ['MB', 'MB2', 'DB', 'P', 'ML', 'M', 'D', 'B', 'L'];
+const canalSummary = (t) => (t.canalList && t.canalList.length ? t.canalList.map((x) => (x.name || '—') + (x.wl ? ' ' + x.wl + 'mm' : '')).join(', ') : (t.wl ? 'WL ' + t.wl + 'mm' : ''));
+const toothExtra = (t) => [t.vitality, canalSummary(t), t.restorations && t.restorations.length ? t.restorations.join(' + ') : ''].filter(Boolean).join(' · ');
+const hasToothInfo = (t) => !!(t.notes || t.vitality || t.wl || (t.canalList && t.canalList.length) || (t.restorations && t.restorations.length));
+
+/* ---------- قائمة منبثقة للاختيار: واحد (قائمة) أو أكثر (نافذة بعلامات ✓) بدون كتابة ---------- */
+function PopupPicker({ options, value, onChange, multi, placeholder, title, openSignal }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => { if (openSignal) setOpen(true); }, [openSignal]);
+  const sel = multi ? (value || []) : (value ? [value] : []);
+  const toggle = (o) => onChange(sel.includes(o) ? sel.filter((x) => x !== o) : [...sel, o].sort((a, b) => options.indexOf(a) - options.indexOf(b)));
+  const remove = (o) => onChange(multi ? sel.filter((x) => x !== o) : '');
+  return (
+    <div className="picker">
+      <div className="picked">
+        {sel.map((o) => (
+          <span key={o} className="pchip">{o}<button type="button" aria-label={'إزالة ' + o} onClick={() => remove(o)}>✕</button></span>
+        ))}
+        <button type="button" className="pickbtn" onClick={() => setOpen(!open)}>{sel.length === 0 ? (placeholder || 'اختر...') : multi ? 'تعديل الأنواع' : 'تغيير'} ▾</button>
+      </div>
+      {!multi && open && (
+        <div className="menu">
+          {options.filter((o) => o !== value).map((o) => <button type="button" key={o} className="mi" onClick={() => { onChange(o); setOpen(false); }}>{o}</button>)}
+        </div>
+      )}
+      {multi && open && createPortal(
+        <div className="pick-ov" onClick={() => setOpen(false)}>
+          <div className="pick-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="head"><h2>{title || 'اختر الأنواع'}</h2><button type="button" className="x" onClick={() => setOpen(false)}>✕</button></div>
+            <p className="hint" style={{ marginBottom: 6 }}>اضغط على الأنواع لاختيارها أو إلغائها، تكدر تختار أكثر من نوع</p>
+            {options.map((o) => (
+              <button type="button" key={o} className={'opt' + (sel.includes(o) ? ' on' : '')} onClick={() => toggle(o)}>
+                <span className="box">{sel.includes(o) ? '✓' : ''}</span>{o}
+              </button>
+            ))}
+            <button type="button" className="btn block" style={{ marginTop: 14 }} onClick={() => setOpen(false)}>تم ({sel.length})</button>
+          </div>
+        </div>, document.body)}
+    </div>
+  );
+}
+
+/* ---------- قفل التطبيق بـ Face ID / Touch ID / رمز الجهاز (WebAuthn) ---------- */
+const lockKey = (uid) => 'sc_lock_' + uid;
+const getLock = (uid) => { try { return JSON.parse(localStorage.getItem(lockKey(uid)) || 'null'); } catch (e) { return null; } };
+const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const unb64u = (str) => { let x = str.replace(/-/g, '+').replace(/_/g, '/'); while (x.length % 4) x += '='; return Uint8Array.from(atob(x), (ch) => ch.charCodeAt(0)); };
+const lockSupported = async () => {
+  try { return !!(window.PublicKeyCredential && window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable && await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()); } catch (e) { return false; }
+};
+const lockEnroll = async (uid, email) => {
+  const cred = await navigator.credentials.create({
+    publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      rp: { name: 'Sestemy College' },
+      user: { id: new TextEncoder().encode(uid.slice(0, 60)), name: email || uid, displayName: email || uid },
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged' },
+      timeout: 60000, attestation: 'none',
+    },
+  });
+  return b64u(cred.rawId);
+};
+const lockVerify = async (id) => {
+  await navigator.credentials.get({
+    publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials: [{ type: 'public-key', id: unb64u(id), transports: ['internal'] }],
+      userVerification: 'required', timeout: 60000,
+    },
+  });
+  return true;
+};
+
+function AppLockScreen({ uid, onUnlock }) {
+  const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+  const unlock = async () => {
+    const cfg = getLock(uid);
+    if (!cfg) { onUnlock(); return; }
+    setBusy(true); setMsg('');
+    try { await lockVerify(cfg.id); onUnlock(); } catch (e) { setMsg('ما تم التحقق، جرّب مرة ثانية'); }
+    setBusy(false);
+  };
+  useEffect(() => { unlock(); }, []);
+  return (
+    <div className="center">
+      <div className="card stack" style={{ width: '100%', maxWidth: 380, textAlign: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'center' }}><Logo size={92} /></div>
+        <h2>التطبيق مقفل 🔒</h2>
+        <p className="muted bold">استخدم Face ID أو بصمتك أو رمز الجهاز لفتح التطبيق</p>
+        {msg && <div className="msg err">{msg}</div>}
+        <button className="btn block" onClick={unlock} disabled={busy}>{busy ? '...' : 'فتح القفل'}</button>
+        <button className="btn ghost block" onClick={() => { try { localStorage.removeItem(lockKey(uid)); } catch (e) {} signOut(auth); }}>تسجيل الخروج</button>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- حقول خاصة بالمادة (حشوات / لثة) ---------- */
 function SubjectFields({ subject, v, set }) {
   if (subject === 'operative') {
-    const sel = v.fillingClasses || [];
-    const toggle = (c) => set('fillingClasses', (sel.includes(c) ? sel.filter((x) => x !== c) : [...sel, c]).sort((a, b) => FILLING_CLASSES.indexOf(a) - FILLING_CLASSES.indexOf(b)));
     return (
       <div className="stack">
         <h3>Restoration Type</h3>
-        <p className="hint">اختر نوع واحد أو أكثر</p>
-        <div className="chipsel">
-          {FILLING_CLASSES.map((c) => <button type="button" key={c} className={'selchip' + (sel.includes(c) ? ' on' : '')} onClick={() => toggle(c)}>{c}</button>)}
-        </div>
+        <p className="hint">اختر من القائمة نوع واحد أو أكثر، وتكدر تمسح أي نوع بعلامة ✕</p>
+        <PopupPicker multi options={FILLING_CLASSES} value={v.fillingClasses || []} onChange={(val) => set('fillingClasses', val)} placeholder="اختر نوع الحشوة" />
       </div>
     );
   }
@@ -531,9 +629,7 @@ function SubjectFields({ subject, v, set }) {
     return (
       <div className="stack">
         <h3>Periodontal Status</h3>
-        <div className="chipsel">
-          {PERIO_LEVELS.map((l) => <button type="button" key={l} className={'selchip' + (v.perioSeverity === l ? ' on' : '')} onClick={() => set('perioSeverity', v.perioSeverity === l ? '' : l)}>{l}</button>)}
-        </div>
+        <PopupPicker options={PERIO_LEVELS} value={v.perioSeverity || ''} onChange={(val) => set('perioSeverity', val)} placeholder="اختر التصنيف" />
         <label className="field"><span>CAL Scores</span>
           <input className="input ltr" type="number" inputMode="decimal" step="0.5" min="0" value={v.calScore ?? ''} onChange={(e) => set('calScore', e.target.value)} placeholder="0" />
         </label>
@@ -674,8 +770,9 @@ function CaseDetail({ c, subjects, onBack, save, remove, flash, onNewSheet, done
   const [cond, setCond] = useState('sound');
   const [notes, setNotes] = useState('');
   const [tv, setTv] = useState('');
-  const [twl, setTwl] = useState('');
-  const [tcan, setTcan] = useState('');
+  const [tcanals, setTcanals] = useState([]);
+  const [trest, setTrest] = useState([]);
+  const [pickSignal, setPickSignal] = useState(0);
   const [tcurv, setTcurv] = useState('');
   const [tobt, setTobt] = useState('');
   const [vDate, setVDate] = useState(todayStr());
@@ -723,15 +820,21 @@ function CaseDetail({ c, subjects, onBack, save, remove, flash, onNewSheet, done
   const pickTooth = (n) => {
     const t = teeth[n] || {};
     setTooth(n); setCond(t.condition || 'caries'); setNotes(t.notes || '');
-    setTv(t.vitality || ''); setTwl(t.wl || ''); setTcan(t.canals || ''); setTcurv(t.curvature || ''); setTobt(t.obturation || '');
+    setTv(t.vitality || ''); setTcurv(t.curvature || ''); setTobt(t.obturation || '');
+    setTrest(t.restorations ? [...t.restorations] : []);
+    if (t.canalList) setTcanals(t.canalList.map((x) => ({ ...x })));
+    else { const cnt = Number(t.canals) || (t.wl ? 1 : 0); setTcanals(Array.from({ length: cnt }, (_, i) => ({ id: uid8(), name: '', wl: i === 0 ? (t.wl || '') : '' }))); }
   };
   const saveTooth = async () => {
     const rec = { condition: cond, notes: notes.trim() };
-    if (tv) rec.vitality = tv;
-    if (twl) rec.wl = twl;
-    if (tcan) rec.canals = tcan;
-    if (tcurv) rec.curvature = tcurv;
-    if (tobt.trim()) rec.obturation = tobt.trim();
+    if (cond === 'rct') {
+      if (tv) rec.vitality = tv;
+      if (tcurv) rec.curvature = tcurv;
+      if (tobt.trim()) rec.obturation = tobt.trim();
+      const cl = tcanals.filter((x) => x.name.trim() || x.wl).map((x) => ({ id: x.id, name: x.name.trim(), wl: x.wl }));
+      if (cl.length) rec.canalList = cl;
+    }
+    if (cond === 'filled' && trest.length) rec.restorations = trest;
     try { await save(c.id, { teeth: { ...teeth, [tooth]: rec } }); setTooth(null); } catch (e) { flash('ما انحفظ'); }
   };
   const clearTooth = async () => {
@@ -749,7 +852,7 @@ function CaseDetail({ c, subjects, onBack, save, remove, flash, onNewSheet, done
     try { await save(c.id, { visits: (c.visits || []).filter((v) => v.id !== id) }); } catch (e) { flash('ما انحذفت'); }
   };
 
-  const recorded = Object.entries(teeth).filter(([, t]) => t.condition !== 'sound' || t.notes || t.vitality || t.wl);
+  const recorded = Object.entries(teeth).filter(([, t]) => t.condition !== 'sound' || hasToothInfo(t));
 
   return (
     <div className="app stack">
@@ -880,7 +983,7 @@ function CaseDetail({ c, subjects, onBack, save, remove, flash, onNewSheet, done
                     <span className="grow">
                       <b>{cd ? cd.label : ''}</b>
                       {t.notes ? <span className="muted small bold"> — {t.notes}</span> : null}
-                      {t.vitality || t.wl || t.canals ? <div className="small muted bold">{[t.vitality, t.wl ? 'WL ' + t.wl + 'mm' : '', t.canals ? t.canals + ' قنوات' : ''].filter(Boolean).join(' · ')}</div> : null}
+                      {toothExtra(t) ? <div className="small muted bold">{toothExtra(t)}</div> : null}
                     </span>
                   </button>
                 );
@@ -925,11 +1028,17 @@ function CaseDetail({ c, subjects, onBack, save, remove, flash, onNewSheet, done
           <div className="stack">
             <div className="grid2">
               {CONDITIONS.map((x) => (
-                <button key={x.id} className="btn ghost" style={cond === x.id ? { borderColor: x.color, background: x.color + '33' } : {}} onClick={() => setCond(x.id)}>
+                <button key={x.id} className="btn ghost" style={cond === x.id ? { borderColor: x.color, background: x.color + '33' } : {}} onClick={() => { setCond(x.id); if (x.id === 'filled' && trest.length === 0) setPickSignal((n) => n + 1); }}>
                   <i style={{ width: 10, height: 10, borderRadius: 4, background: x.color, display: 'inline-block' }} /> {x.label}
                 </button>
               ))}
             </div>
+            {cond === 'filled' && (
+              <div className="card stack" style={{ boxShadow: 'none', background: 'var(--brand-soft)' }}>
+                <h3>Restoration Type</h3>
+                <PopupPicker multi options={FILLING_CLASSES} value={trest} onChange={setTrest} placeholder="اختر نوع الحشوة" title="Restoration Type" openSignal={pickSignal} />
+              </div>
+            )}
             <label className="field"><span>ملاحظة</span><textarea className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="مثال: composite class I" /></label>
             {cond === 'rct' && (
               <div className="card stack" style={{ boxShadow: 'none', background: 'var(--brand-soft)' }}>
@@ -937,9 +1046,23 @@ function CaseDetail({ c, subjects, onBack, save, remove, flash, onNewSheet, done
                 <label className="field"><span>اختبار الحيوية</span>
                   <select className="input" value={tv} onChange={(e) => setTv(e.target.value)}><option value="">—</option><option>حيوي</option><option>غير حيوي</option><option>غير مؤكد</option></select>
                 </label>
-                <div className="grid2">
-                  <label className="field"><span>طول العمل (مم)</span><input className="input" type="number" inputMode="decimal" value={twl} onChange={(e) => setTwl(e.target.value)} /></label>
-                  <label className="field"><span>عدد القنوات</span><input className="input" type="number" inputMode="numeric" value={tcan} onChange={(e) => setTcan(e.target.value)} /></label>
+                <div className="stack">
+                  <div className="row between">
+                    <h3>القنوات ({tcanals.length})</h3>
+                    <button type="button" className="btn soft small" onClick={() => setTcanals([...tcanals, { id: uid8(), name: '', wl: '' }])}>＋ إضافة قناة</button>
+                  </div>
+                  <div className="chipsel">
+                    {CANAL_SUGGEST.filter((n) => !tcanals.some((x) => x.name.trim().toUpperCase() === n)).map((n) => (
+                      <button type="button" key={n} className="selchip" onClick={() => setTcanals([...tcanals, { id: uid8(), name: n, wl: '' }])}>＋ {n}</button>
+                    ))}
+                  </div>
+                  {tcanals.length === 0 ? <p className="hint">اضغط "إضافة قناة" أو اختر اسم جاهز، وسجّل طول العمل لكل قناة.</p> : tcanals.map((cn) => (
+                    <div key={cn.id} className="row">
+                      <input className="input grow" placeholder="اسم القناة" value={cn.name} onChange={(e) => setTcanals(tcanals.map((x) => (x.id === cn.id ? { ...x, name: e.target.value } : x)))} />
+                      <input className="input ltr" style={{ width: 92 }} type="number" inputMode="decimal" placeholder="WL مم" value={cn.wl} onChange={(e) => setTcanals(tcanals.map((x) => (x.id === cn.id ? { ...x, wl: e.target.value } : x)))} />
+                      <button type="button" className="x" aria-label="حذف القناة" onClick={() => setTcanals(tcanals.filter((x) => x.id !== cn.id))}>✕</button>
+                    </div>
+                  ))}
                 </div>
                 <label className="field"><span>انحناء القناة</span>
                   <select className="input" value={tcurv} onChange={(e) => setTcurv(e.target.value)}><option value="">—</option><option>خفيف</option><option>متوسط</option><option>شديد</option></select>
@@ -1127,10 +1250,27 @@ function Main({ user }) {
   const [status, setStatus] = useState({ loaded: false });
   const [pwWait, setPwWait] = useState(0);
   const [party, setParty] = useState(null);
+  const [itemForm, setItemForm] = useState(null);
+  const [appLocked, setAppLocked] = useState(() => !!getLock(user.uid));
+  const [lockOn, setLockOn] = useState(() => !!getLock(user.uid));
+  const [lockOk, setLockOk] = useState(null);
   const lockedRef = useRef(null);
 
   const flash = (t) => { setToast(t); setTimeout(() => setToast(''), 2400); };
   const celebrate = (m) => { setParty(m); setTimeout(() => setParty(null), 3800); };
+
+  // قفل التطبيق: عند الفتح، وعند الرجوع بعد أكثر من 30 ثانية
+  useEffect(() => { lockSupported().then(setLockOk); }, []);
+  useEffect(() => {
+    let hiddenAt = 0;
+    const onVis = () => {
+      if (document.hidden) { hiddenAt = Date.now(); return; }
+      if (hiddenAt && Date.now() - hiddenAt > 30000 && getLock(user.uid)) setAppLocked(true);
+      hiddenAt = 0;
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [user.uid]);
 
   // زر الرجوع بالموبايل يرجّعك من الحالة للقائمة بدل ما يطلع من التطبيق
   useEffect(() => {
@@ -1206,6 +1346,23 @@ function Main({ user }) {
 
   const subjects = useMemo(() => ((student && student.subjects) || DEFAULT_SUBJECTS).map((x) => (OLD_AR_NAMES[x.id] === x.name ? { ...x, name: (DEFAULT_SUBJECTS.find((d) => d.id === x.id) || x).name } : x)), [student]);
   const saveStudent = (patch) => setDoc(doc(db, 'students', user.uid), patch, { merge: true });
+
+  // المخزن: مواد بكمية وحد أدنى للتنبيه (مثل Sestemy)
+  const inventory = (student && student.inventory) || [];
+  const lowItems = inventory.filter((i) => Number(i.qty) <= Number(i.min));
+  const saveInventory = (next) => saveStudent({ inventory: next }).catch(() => flash('ما انحفظ، تأكد من الإنترنت'));
+  const adjustItem = (id, d) => saveInventory(inventory.map((i) => (i.id === id ? { ...i, qty: Math.max(0, Number(i.qty) + d) } : i)));
+  const openItem = (it) => setItemForm(it ? { id: it.id, name: it.name, qty: String(it.qty), min: String(it.min) } : { id: null, name: '', qty: '', min: '3' });
+  const submitItem = () => {
+    const f = itemForm; const name = f.name.trim();
+    if (!name) { flash('اكتب اسم المادة'); return; }
+    const qty = Number(f.qty);
+    if (f.qty === '' || !Number.isFinite(qty) || qty < 0) { flash('اكتب الكمية'); return; }
+    const min = f.min === '' ? 3 : Math.max(0, Number(f.min) || 0);
+    saveInventory(f.id ? inventory.map((i) => (i.id === f.id ? { ...i, name, qty, min } : i)) : [...inventory, { id: uid8(), name, qty, min }]);
+    setItemForm(null);
+  };
+  const deleteItem = async (it) => { if (await askConfirm(`حذف "${it.name}" من المخزن؟`, 'حذف')) saveInventory(inventory.filter((i) => i.id !== it.id)); };
   // updateDoc يستبدل الحقول المرسلة كاملة (setDoc+merge كان يدمج خريطة الأسنان فلا يحذف سن ممسوح)
   const saveCase = (id, patch) => updateDoc(doc(db, 'cases', id), patch);
   const removeCase = async (id) => {
@@ -1272,6 +1429,7 @@ function Main({ user }) {
     </Sheet>
   ) : null;
 
+  if (appLocked) return <AppLockScreen uid={user.uid} onUnlock={() => setAppLocked(false)} />;
   if (!status.loaded) return <Splash />;
   if (locked) return <LockedScreen expired={expired && !blocked} />;
 
@@ -1291,6 +1449,15 @@ function Main({ user }) {
       </>
     );
   }
+
+  const enableLock = async () => {
+    try {
+      const id = await lockEnroll(user.uid, user.email);
+      localStorage.setItem(lockKey(user.uid), JSON.stringify({ id, at: Date.now() }));
+      setLockOn(true); flash('تم تفعيل القفل ✓');
+    } catch (e) { flash('تعذر تفعيل القفل (ألغيت العملية أو غير مدعوم)'); }
+  };
+  const disableLock = () => { try { localStorage.removeItem(lockKey(user.uid)); } catch (e) {} setLockOn(false); flash('تم إيقاف القفل'); };
 
   const sendPwMail = async () => {
     try { await sendPasswordResetEmail(auth, user.email); setPwWait(60); flash('تم إرسال رسالة التحقق ✓ تفقد الإيميل (وSpam)'); } catch (e) { flash(authError(e.code)); }
@@ -1323,7 +1490,7 @@ function Main({ user }) {
   const exportJson = () => {
     const payload = {
       app: 'sestemy-college', version: 1, exportedAt: new Date().toISOString(),
-      student: { name: student?.name || '', university: student?.university || '', subjects },
+      student: { name: student?.name || '', university: student?.university || '', subjects, inventory },
       cases: cases.map(({ id, studentId, ...rest }) => rest),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -1343,6 +1510,7 @@ function Main({ user }) {
       if (data.app !== 'sestemy-college' || !Array.isArray(data.cases)) { flash('الملف مو نسخة Sestemy College'); return; }
       if (!(await askConfirm(`استيراد ${data.cases.length} حالة؟ تنضاف للموجود ولا تحذف شي.`, 'استيراد'))) return;
       if (data.student && Array.isArray(data.student.subjects) && data.student.subjects.length) await saveStudent({ subjects: data.student.subjects });
+      if (data.student && Array.isArray(data.student.inventory) && data.student.inventory.length && inventory.length === 0) await saveStudent({ inventory: data.student.inventory });
       for (let i = 0; i < data.cases.length; i += 400) {
         const batch = writeBatch(db);
         data.cases.slice(i, i + 400).forEach((c) => {
@@ -1359,8 +1527,8 @@ function Main({ user }) {
     if (!w) { flash('المتصفح منع النافذة، اسمح بها وجرّب'); return; }
     const sNm = (id) => (subjects.find((s) => s.id === id) || {}).name || '—';
     const body = cases.map((c) => {
-      const tl = Object.entries(c.teeth || {}).filter(([, t]) => t.condition !== 'sound' || t.notes)
-        .map(([n, t]) => `${esc(n)}: ${esc((CONDITIONS.find((x) => x.id === t.condition) || {}).label)}${t.notes ? ' (' + esc(t.notes) + ')' : ''}`).join(' | ');
+      const tl = Object.entries(c.teeth || {}).filter(([, t]) => t.condition !== 'sound' || hasToothInfo(t))
+        .map(([n, t]) => `${esc(n)}: ${esc((CONDITIONS.find((x) => x.id === t.condition) || {}).label)}${t.notes ? ' (' + esc(t.notes) + ')' : ''}${toothExtra(t) ? ' [' + esc(toothExtra(t)) + ']' : ''}`).join(' | ');
       const vl = (c.visits || []).slice().sort((a, b) => a.date.localeCompare(b.date))
         .map((v) => `<li>${esc(v.date)} ${esc(v.time)} — ${esc(v.work)}${v.supervisor ? ' (المشرف: ' + esc(v.supervisor) + ')' : ''}</li>`).join('');
       return `<section><h2>${esc(c.name)} <small>${esc(c.age)} ${esc(c.gender)} · ${esc(sNm(c.subject))} · ${c.status === 'done' ? 'منجزة' : 'قيد العمل'}</small></h2>
@@ -1434,6 +1602,7 @@ function Main({ user }) {
           </div>
 
           {!isSuper && daysLeft !== null && daysLeft >= 0 && daysLeft <= 7 && <div className="alert" style={{ background: '#fef3c7', borderColor: '#fcd34d', color: '#92400e' }}>⏳ اشتراكك ينتهي بعد {daysLeft} أيام، تواصل مع الدعم للتجديد</div>}
+          {lowItems.length > 0 && <button className="alert" style={{ background: '#fff7ed', borderColor: '#fdba74', color: '#9a3412' }} onClick={() => setView('inventory')}>📦 {lowItems.length} مواد وصلت للحد الأدنى بالمخزن</button>}
           {bookings.length > 0 && <button className="alert" onClick={() => setView('bookings')}>📅 {bookings.length} طلب حجز جديد بانتظار ردك</button>}
           {remaining > 0 && <button className="alert" style={{ background: 'var(--brand-soft)', borderColor: 'var(--line)', color: 'var(--brand-dark)' }} onClick={() => setView('subjects')}>📚 باقي {remaining} حالة لإكمال المتطلبات</button>}
 
@@ -1454,6 +1623,7 @@ function Main({ user }) {
 
           <div className="card statcard"><div><div className="lbl">حالات اليوم</div><div className="num" style={{ color: 'var(--brand-dark)' }}>{todayCount}</div></div><div className="ico g"><Icon name="users" /></div></div>
           <div className="card statcard"><div><div className="lbl">إجمالي المرضى</div><div className="num" style={{ color: 'var(--blue)' }}>{cases.length}</div></div><div className="ico b"><Icon name="pulse" /></div></div>
+          <div className="card statcard"><div><div className="lbl">تنبيهات المخزن</div><div className="num" style={{ color: 'var(--amber)' }}>{lowItems.length} <span className="hint">مواد</span></div></div><div className="ico o"><Icon name="box" /></div></div>
           <div className="card statcard"><div><div className="lbl">طلبات الحجز</div><div className="num" style={{ color: 'var(--red)' }}>{bookings.length}</div></div><div className="ico r"><Icon name="calendar" /></div></div>
 
           {upcoming.length > 0 && (
@@ -1568,9 +1738,48 @@ function Main({ user }) {
 
       {view === 'admin' && isSuper && <SuperAdmin flash={flash} />}
 
+      {view === 'inventory' && (
+        <>
+          <div className="row between"><h2>مخزن المستلزمات</h2><button className="btn small" onClick={() => openItem(null)}>＋ مستلزم</button></div>
+          <p className="hint">سجّل موادك (بنج، مواد حشوات، قفازات...) وتابع الكميات. يطلع تنبيه لما توصل المادة للحد الأدنى.</p>
+          {lowItems.length > 0 && <div className="alert" style={{ background: '#fff7ed', borderColor: '#fdba74', color: '#9a3412' }}>📦 {lowItems.length} مواد وصلت للحد الأدنى</div>}
+          {inventory.length === 0 ? (
+            <div className="card empty">المخزن فارغ حالياً. أضف مستلزماتك للبدء بالمراقبة.<br /><button className="btn small" style={{ marginTop: 12 }} onClick={() => openItem(null)}>＋ أضف أول مستلزم</button></div>
+          ) : (
+            <div className="invgrid">
+              {inventory.map((item) => {
+                const low = Number(item.qty) <= Number(item.min);
+                return (
+                  <div key={item.id} className={'card stack inv' + (low ? ' low' : '')}>
+                    <div className="row between">
+                      <h3 className="grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</h3>
+                      {low && <span className="chip lowchip">تنبيه!</span>}
+                    </div>
+                    <p className="hint">الحد الأدنى للتنبيه: <b>{item.min}</b></p>
+                    <div className="qtybox"><span className="hint">الكمية الحالية</span><b className={'qty' + (low ? ' low' : '')}>{item.qty}</b></div>
+                    <div className="row">
+                      <button className="btn danger small grow" onClick={() => adjustItem(item.id, -1)}>− صرف</button>
+                      <button className="btn soft small grow" onClick={() => adjustItem(item.id, 5)}>＋ توريد</button>
+                      <button className="btn ghost small" aria-label="تعديل" onClick={() => openItem(item)}>✎</button>
+                      <button className="btn ghost small" aria-label="حذف" onClick={() => deleteItem(item)}>🗑</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
       {view === 'settings' && (
         <>
           <h2>الإعدادات</h2>
+          {isSuper && (
+            <button className="card row between" style={{ width: '100%', textAlign: 'right' }} onClick={() => setView('admin')}>
+              <div className="row"><div className="ico g" style={{ width: 44, height: 44, borderRadius: 16 }}><Icon name="shield" /></div><div><h3>لوحة الإدارة العليا</h3><p className="hint">الطلاب والاشتراكات</p></div></div>
+              <span className="link">فتح</span>
+            </button>
+          )}
           <div className="card stack">
             <h3>ملفي</h3>
             <label className="field"><span>الاسم</span><input className="input" value={profName} onChange={(e) => setProfName(e.target.value)} /></label>
@@ -1583,6 +1792,13 @@ function Main({ user }) {
               <p className="hint">آيفون: افتح الرابط بـ Safari ← زر المشاركة ← "إضافة إلى الشاشة الرئيسية". أندرويد: Chrome ← القائمة ⋮ ← "تثبيت التطبيق". بعدها يشتغل مثل أي تطبيق بأيقونته وبدون شريط المتصفح.</p>
             </div>
           )}
+          <div className="card stack">
+            <h3>🔒 قفل التطبيق</h3>
+            <p className="hint">يُقفل التطبيق ويُفتح بـ Face ID أو البصمة أو رمز الجهاز. يُطلب عند فتح التطبيق، وبعد ما تتركه أكثر من 30 ثانية. القفل يخص هذا الجهاز فقط.</p>
+            {lockOk === null ? null : lockOk ? (
+              lockOn ? <button className="btn danger block" onClick={disableLock}>إيقاف القفل</button> : <button className="btn block" onClick={enableLock}>تفعيل القفل</button>
+            ) : <p className="hint">هذا الجهاز أو المتصفح لا يدعم القفل. جرّب Safari على آيفون أو Chrome على أندرويد.</p>}
+          </div>
           <div className="card stack">
             <h3>تغيير كلمة المرور</h3>
             <p className="hint">للأمان نرسل رسالة تحقق إلى إيميلك <span className="ltr bold">{user.email}</span>. افتح الرابط الذي بالرسالة واكتب كلمة المرور الجديدة.</p>
@@ -1616,10 +1832,26 @@ function Main({ user }) {
           <button className="plus" onClick={() => openNewSheet(null)} aria-label="حالة جديدة"><Icon name="plus" /></button>
           <button className={'rel' + (view === 'bookings' ? ' on' : '')} onClick={() => setView('bookings')} aria-label="الحجوزات"><Icon name="calendar" />{bookings.length > 0 ? <em className="badge">{bookings.length}</em> : null}</button>
           <button className={view === 'subjects' ? 'on' : ''} onClick={() => setView('subjects')} aria-label="المواد"><Icon name="book" /></button>
+          <button className={'rel' + (view === 'inventory' ? ' on' : '')} onClick={() => setView('inventory')} aria-label="المخزن"><Icon name="box" />{lowItems.length > 0 ? <em className="badge">{lowItems.length}</em> : null}</button>
           <button className={view === 'settings' ? 'on' : ''} onClick={() => setView('settings')} aria-label="الإعدادات"><Icon name="gear" /></button>
-          {isSuper && <button className={view === 'admin' ? 'on' : ''} onClick={() => setView('admin')} aria-label="لوحة الإدارة"><Icon name="shield" /></button>}
         </div>
       </nav>
+
+      {itemForm && (
+        <Sheet title={itemForm.id ? 'تعديل المستلزم' : 'مستلزم جديد'} onClose={() => setItemForm(null)}>
+          <div className="stack">
+            <label className="field"><span>اسم المادة</span><input className="input" value={itemForm.name} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} placeholder="مثال: بنج أسنان (Lidocaine)" /></label>
+            <div className="grid2">
+              <label className="field"><span>{itemForm.id ? 'الكمية الحالية' : 'الكمية المدخلة الآن'}</span><input className="input" type="number" inputMode="numeric" min="0" value={itemForm.qty} onChange={(e) => setItemForm({ ...itemForm, qty: e.target.value })} placeholder="مثلاً: 50" /></label>
+              <label className="field"><span>ينبهني عندما تصل إلى</span><input className="input" type="number" inputMode="numeric" min="0" value={itemForm.min} onChange={(e) => setItemForm({ ...itemForm, min: e.target.value })} placeholder="الافتراضي: 3" /></label>
+            </div>
+            <div className="row">
+              <button className="btn ghost" onClick={() => setItemForm(null)}>إلغاء</button>
+              <button className="btn grow" onClick={submitItem}>{itemForm.id ? 'حفظ التعديل' : 'إضافة للمخزن'}</button>
+            </div>
+          </div>
+        </Sheet>
+      )}
 
       {newCaseSheet}
 
