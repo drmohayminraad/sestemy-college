@@ -22,10 +22,8 @@ const DEFAULT_SUBJECTS = [
   { id: 'pedo', name: 'Pediatric Dentistry', required: 6 },
   { id: 'ortho', name: 'Orthodontics', required: 5 },
 ];
-// أسماء المواد القديمة (عربي) تتحول تلقائياً للإنكليزي عند العرض
 const OLD_AR_NAMES = { operative: 'الترميمية', endo: 'اللب (علاج العصب)', prostho: 'التعويضات', perio: 'اللثة', surgery: 'جراحة الفم', pedo: 'أسنان الأطفال', ortho: 'التقويم' };
 
-// تفاصيل خاصة بمادتين: الحشوات (Operative) واللثة (Periodontics)
 const FILLING_CLASSES = ['Composite CL I', 'Composite CL II', 'Composite CL III', 'Composite CL IV', 'Composite CL V'];
 const PERIO_LEVELS = ['Mild', 'Moderate', 'Severe'];
 
@@ -40,7 +38,6 @@ const CONDITIONS = [
   { id: 'extract', label: 'To Extract', color: '#e5493a' },
 ];
 
-// ترقيم FDI: من يسار الشاشة إلى يمينها
 const PERM_UP = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
 const PERM_LOW = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
 const PRIM_UP = [55, 54, 53, 52, 51, 61, 62, 63, 64, 65];
@@ -48,10 +45,9 @@ const PRIM_LOW = [85, 84, 83, 82, 81, 71, 72, 73, 74, 75];
 
 const SHEET_FIELDS = ['name', 'age', 'gender', 'phone', 'address', 'subject', 'date', 'chief', 'presentIllness', 'medicalHistory', 'dentalHistory', 'examination', 'diagnosis', 'fillingClasses', 'perioSeverity', 'calScore'];
 
-// أوقات جلسات الطالب (الحجز الإلكتروني) وأيام العطلة (0=الأحد ... 5=الجمعة، 6=السبت)
 const STUDENT_TIMES = ['08:30 صباحاً', '10:30 صباحاً', '12:30 ظهراً'];
-const OFF_DAYS = [5, 6];
-// حساب المدير الوحيد (لوحة الإدارة العليا) + رقم واتساب الدعم بصيغة دولية بدون +
+// تم التعديل: العطلة يوم الجمعة فقط
+const OFF_DAYS = [5]; 
 const SUPER_EMAIL = 'wsx67hb@gmail.com';
 const SUPPORT_WA = '9647719667763';
 const PLANS = ['تجربة مجانية', 'اشتراك شهري', 'اشتراك 3 أشهر', 'اشتراك سنوي'];
@@ -81,7 +77,6 @@ const uid8 = () => Math.random().toString(36).slice(2, 10);
 const toAr = (s) => String(s).replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[d]);
 const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const pickSheet = (c) => { const o = {}; SHEET_FIELDS.forEach((k) => { o[k] = c[k] ?? (k === 'fillingClasses' ? [] : ''); }); return o; };
-// سطر مختصر لتفاصيل الحالة (نوع الحشوة أو تصنيف اللثة)
 const caseDetail = (c) => {
   if (c.subject === 'operative' && (c.fillingClasses || []).length) return c.fillingClasses.join(' + ');
   if (c.subject === 'perio' && (c.perioSeverity || c.calScore)) return [c.perioSeverity, c.calScore !== '' && c.calScore != null ? 'CAL ' + c.calScore : ''].filter(Boolean).join(' · ');
@@ -98,7 +93,6 @@ const nextDays = (n) => {
   return out;
 };
 
-// أرقام الهاتف: تحويل الأرقام العربية، وصيغة الاتصال والواتساب (العراق +964)
 const latinDigits = (v) => String(v || '').replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 const telNumber = (v) => latinDigits(v).replace(/[^\d+]/g, '');
 const waNumber = (v) => {
@@ -108,8 +102,6 @@ const waNumber = (v) => {
   else if (d.length === 10 && d.startsWith('7')) d = '964' + d;
   return d;
 };
-
-// رقم عراقي: يقبل 0770... أو 770... أو +964 أو بالأرقام العربية، ويُحفظ بصيغة 07XXXXXXXXX
 const normIraqPhone = (v) => {
   let d = latinDigits(v).replace(/\D/g, '');
   if (d.startsWith('00964')) d = d.slice(5); else if (d.startsWith('964')) d = d.slice(3);
@@ -129,7 +121,6 @@ const authError = (code) => ({
   'auth/network-request-failed': 'تأكد من الإنترنت',
 }[code] || 'صار خطأ، جرّب مرة ثانية');
 
-/* ---------- نافذة تأكيد أنيقة (بدل confirm الجاهز) ---------- */
 let confirmHost = null;
 const askConfirm = (message, okLabel = 'تأكيد') => new Promise((resolve) => {
   if (confirmHost) confirmHost({ message, okLabel, resolve }); else resolve(window.confirm(message));
@@ -152,7 +143,6 @@ function ConfirmHost() {
   );
 }
 
-/* ---------- حماية من الشاشة البيضاء ---------- */
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { err: null }; }
   static getDerivedStateFromError(err) { return { err }; }
@@ -184,7 +174,6 @@ function Splash() {
   );
 }
 
-/* ---------- احتفال عند إكمال متطلبات ---------- */
 function Confetti({ msg }) {
   const bits = useMemo(() => Array.from({ length: 26 }, (_, i) => ({ left: Math.random() * 100, delay: Math.random() * 0.6, dur: 2 + Math.random() * 1.5, e: ['🎉', '✨', '🦷', '⭐', '🎊'][i % 5] })), []);
   return (
@@ -195,7 +184,6 @@ function Confetti({ msg }) {
   );
 }
 
-/* ---------- مكوّنات صغيرة ---------- */
 function Ring({ value, max, size = 76 }) {
   const r = 22, c = 2 * Math.PI * r;
   const pct = max ? Math.min(value / max, 1) : 0;
@@ -365,7 +353,7 @@ function PublicBooking({ id }) {
     try {
       const batch = writeBatch(db);
       batch.set(doc(db, 'public_slots', slotId(id, date, time)), { studentId: id, date, time });
-      batch.set(doc(collection(db, 'public_bookings')), { studentId: id, name: name.trim(), phone: ph, date, time, note: note.trim(), createdAt: new Date().toISOString() });
+      batch.set(doc(collection(db, 'public_bookings')), { studentId: id, name: name.trim(), phone: ph, date, time, note: note.trim(), status: 'pending', createdAt: new Date().toISOString() });
       await batch.commit();
       setDone(true);
     } catch (e2) {
@@ -432,8 +420,7 @@ function PublicBooking({ id }) {
   );
 }
 
-/* ---------- خريطة الأسنان (نفس تصميم المرجع) ---------- */
-// مواقع الأسنان الدائمة على لوحة 1000×900 (مأخوذة من التصميم المرجعي)
+/* ---------- خريطة الأسنان ---------- */
 const PERM_POS = {
   18: [335, 408], 17: [334, 325], 16: [362, 252], 15: [410, 185], 14: [460, 145], 13: [517, 115], 12: [570, 98], 11: [620, 88],
   21: [693, 90], 22: [750, 98], 23: [805, 115], 24: [862, 145], 25: [912, 187], 26: [958, 247], 27: [987, 327], 28: [985, 408],
@@ -447,7 +434,6 @@ function Odontogram({ dent, teeth, selected, onPick }) {
   const perm = dent === 'permanent';
   const upN = perm ? PERM_UP : PRIM_UP;
   const lowN = perm ? PERM_LOW : PRIM_LOW;
-  // أقواس العلوي والسفلي (مركز، نصف قطر أفقي وعمودي)
   const U = perm ? { cx: 660, cy: 408, rx: 325, ry: 320 } : { cx: 660, cy: 420, rx: 270, ry: 268 };
   const L = perm ? { cx: 660, cy: 487, rx: 304, ry: 325 } : { cx: 660, cy: 470, rx: 256, ry: 272 };
 
@@ -523,13 +509,11 @@ function Odontogram({ dent, teeth, selected, onPick }) {
   );
 }
 
-/* ---------- ملخص تفاصيل السن (قنوات / حشوات) ---------- */
 const CANAL_SUGGEST = ['MB', 'MB2', 'DB', 'P', 'ML', 'M', 'D', 'B', 'L'];
 const canalSummary = (t) => (t.canalList && t.canalList.length ? t.canalList.map((x) => (x.name || '—') + (x.wl ? ' ' + x.wl + 'mm' : '')).join(', ') : (t.wl ? 'WL ' + t.wl + 'mm' : ''));
 const toothExtra = (t) => [t.vitality, canalSummary(t), t.restorations && t.restorations.length ? t.restorations.join(' + ') : ''].filter(Boolean).join(' · ');
 const hasToothInfo = (t) => !!(t.notes || t.vitality || t.wl || (t.canalList && t.canalList.length) || (t.restorations && t.restorations.length));
 
-/* ---------- قائمة منبثقة للاختيار: واحد (قائمة) أو أكثر (نافذة بعلامات ✓) + كتابة نوع آخر ---------- */
 function PopupPicker({ options, value, onChange, multi, placeholder, title, openSignal, allowCustom }) {
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState('');
@@ -638,7 +622,6 @@ function AppLockScreen({ uid, onUnlock }) {
   );
 }
 
-/* ---------- حقول خاصة بالمادة (حشوات / لثة) ---------- */
 function SubjectFields({ subject, v, set }) {
   if (subject === 'operative') {
     return (
@@ -901,7 +884,6 @@ function CaseDetail({ c, subjects, onBack, save, remove, flash, onNewSheet, done
           <div className="row wrap" style={{ gap: 6 }}>
             <span className="chip">{subj ? subj.name : 'بدون مادة'}</span>
             {caseDetail(c) ? <span className="chip done">{caseDetail(c)}</span> : null}
-            {c.apptDate ? <span className="chip work">📅 {c.apptDate} {c.apptTime}</span> : null}
           </div>
           <button className={'btn small ' + (c.status === 'done' ? 'ghost' : '')} onClick={toggleDone}>{c.status === 'done' ? 'إعادة فتح الحالة' : 'تم إنجاز الحالة ✓'}</button>
         </div>
@@ -1253,15 +1235,22 @@ function SuperAdmin({ flash }) {
 }
 
 /* ---------- التطبيق بعد تسجيل الدخول ---------- */
-const BLANK_NC = { name: '', age: '', gender: '', phone: '', address: '', subject: '', fillingClasses: [], perioSeverity: '', calScore: '' };
+// تم إضافة chief و apptId لتجهيز الحالة عند الاستلام
+const BLANK_NC = { name: '', age: '', gender: '', phone: '', address: '', subject: '', fillingClasses: [], perioSeverity: '', calScore: '', chief: '', apptId: null };
 
 function Main({ user }) {
   const [student, setStudent] = useState(null);
   const [cases, setCases] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [appointments, setAppointments] = useState([]); // قائمة الحجوزات المؤكدة الجديدة
   const [view, setView] = useState('home');
   const [openId, setOpenId] = useState(null);
   const [newOpen, setNewOpen] = useState(false);
+  
+  // خاص بحجز يدوي جديد
+  const [newApptOpen, setNewApptOpen] = useState(false);
+  const [newApptData, setNewApptData] = useState({ name: '', phone: '', note: '', date: todayStr(), time: STUDENT_TIMES[0] });
+
   const [toast, setToast] = useState('');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
@@ -1283,7 +1272,7 @@ function Main({ user }) {
   const flash = (t) => { setToast(t); setTimeout(() => setToast(''), 2400); };
   const celebrate = (m) => { setParty(m); setTimeout(() => setParty(null), 3800); };
 
-  // قفل التطبيق: عند الفتح، وعند الرجوع بعد أكثر من 30 ثانية
+  // قفل التطبيق
   useEffect(() => { lockSupported().then(setLockOk); }, []);
   useEffect(() => {
     let hiddenAt = 0;
@@ -1296,7 +1285,7 @@ function Main({ user }) {
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [user.uid]);
 
-  // زر الرجوع بالموبايل يرجّعك من الحالة للقائمة بدل ما يطلع من التطبيق
+  // زر الرجوع بالموبايل
   useEffect(() => {
     const onPop = (e) => setOpenId(e.state && e.state.open ? e.state.open : null);
     window.addEventListener('popstate', onPop);
@@ -1328,7 +1317,11 @@ function Main({ user }) {
     const unsub3 = onSnapshot(query(collection(db, 'public_bookings'), where('studentId', '==', user.uid)), (snap) => {
       setBookings(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)));
     }, () => {});
-    return () => { unsub1(); unsub2(); unsub3(); };
+    // جلب الحجوزات المؤكدة واليدوية الجديدة
+    const unsub4 = onSnapshot(query(collection(db, 'appointments'), where('studentId', '==', user.uid)), (snap) => {
+      setAppointments(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)));
+    }, () => {});
+    return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
   }, [user.uid]);
 
   useEffect(() => {
@@ -1337,7 +1330,6 @@ function Main({ user }) {
     return () => clearTimeout(t);
   }, [pwWait]);
 
-  // حالة الاشتراك والتفعيل (يكتبها المدير فقط). غير موجودة = مفعّل بدون انتهاء
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'student_status', user.uid), (snap) => {
       setStatus({ loaded: true, ...(snap.exists() ? snap.data() : {}) });
@@ -1352,13 +1344,11 @@ function Main({ user }) {
   const locked = !isSuper && (blocked || expired);
   const daysLeft = expMs !== null ? Math.ceil((expMs - Date.now()) / 86400000) : null;
 
-  // إذا انرجع التفعيل وهو فاتح التطبيق، نعيد التحميل حتى ترجع كل الاتصالات
   useEffect(() => {
     if (lockedRef.current === true && !locked) window.location.reload();
     lockedRef.current = locked;
   }, [locked]);
 
-  // نسخة عامة محدودة (الاسم والجامعة فقط) لصفحة الحجز
   useEffect(() => {
     if (student && student.name && student.email !== user.email) saveStudent({ email: user.email }).catch(() => {});
     if (!student || !student.name) return;
@@ -1371,7 +1361,6 @@ function Main({ user }) {
   const subjects = useMemo(() => ((student && student.subjects) || DEFAULT_SUBJECTS).map((x) => (OLD_AR_NAMES[x.id] === x.name ? { ...x, name: (DEFAULT_SUBJECTS.find((d) => d.id === x.id) || x).name } : x)), [student]);
   const saveStudent = (patch) => setDoc(doc(db, 'students', user.uid), patch, { merge: true });
 
-  // المخزن: مواد بكمية وحد أدنى للتنبيه (مثل Sestemy)
   const inventory = (student && student.inventory) || [];
   const lowItems = inventory.filter((i) => Number(i.qty) <= Number(i.min));
   const saveInventory = (next) => saveStudent({ inventory: next }).catch(() => flash('ما انحفظ، تأكد من الإنترنت'));
@@ -1387,7 +1376,7 @@ function Main({ user }) {
     setItemForm(null);
   };
   const deleteItem = async (it) => { if (await askConfirm(`حذف "${it.name}" من المخزن؟`, 'حذف')) saveInventory(inventory.filter((i) => i.id !== it.id)); };
-  // updateDoc يستبدل الحقول المرسلة كاملة (setDoc+merge كان يدمج خريطة الأسنان فلا يحذف سن ممسوح)
+  
   const saveCase = (id, patch) => updateDoc(doc(db, 'cases', id), patch);
   const removeCase = async (id) => {
     const c = cases.find((x) => x.id === id);
@@ -1401,7 +1390,7 @@ function Main({ user }) {
         }
       } catch (err) {}
       await deleteDoc(doc(db, 'cases', id));
-      if (c && c.apptDate && c.apptTime) { try { await deleteDoc(doc(db, 'public_slots', slotId(user.uid, c.apptDate, c.apptTime))); } catch (e) {} }
+      // لا نمسح الحجز من public_slots هنا حتى لو انحذفت الحالة، أو حسب الحاجة
       closeCase();
     } catch (e) { flash('ما انحذفت'); }
   };
@@ -1421,14 +1410,32 @@ function Main({ user }) {
       const id = doc(collection(db, 'cases')).id;
       await setDoc(doc(db, 'cases', id), {
         studentId: user.uid, name: nc.name.trim(), age: nc.age, gender: nc.gender, phone: nc.phone, address: nc.address, subject: nc.subject,
+        chief: nc.chief || '',
         fillingClasses: nc.fillingClasses || [], perioSeverity: nc.perioSeverity || '', calScore: nc.calScore || '',
         status: 'active', date: todayStr(), createdAt: Date.now(), teeth: {}, visits: [],
       });
+      
+      // إذا كان هذا تسجيل استلام لحجز، نمسح الحجز من قائمة الحجوزات
+      if (nc.apptId) {
+        await deleteDoc(doc(db, 'appointments', nc.apptId)).catch(()=>{});
+      }
+
       setNewOpen(false); setNc(BLANK_NC); openCaseById(id);
     } catch (e) { flash('ما انحفظت الحالة، تأكد من الإنترنت'); }
     setBusy(false);
   };
-  const openNewSheet = (c) => { setNc({ ...BLANK_NC, name: c ? c.name || '' : '', age: c ? c.age || '' : '', gender: c ? c.gender || '' : '', phone: c ? c.phone || '' : '', address: c ? c.address || '' : '' }); setNewOpen(true); };
+  
+  // دالة ذكية تقبل بيانات الحجز وتجهز الورقة فوراً (عملية الاستلام)
+  const openNewSheet = (c, appt = null) => { 
+    setNc({ 
+      ...BLANK_NC, 
+      name: c ? c.name || '' : (appt ? appt.name : ''), 
+      phone: c ? c.phone || '' : (appt ? appt.phone : ''), 
+      chief: appt ? appt.chief : '',
+      apptId: appt ? appt.id : null 
+    }); 
+    setNewOpen(true); 
+  };
 
   const newCaseSheet = newOpen ? (
     <Sheet title="حالة جديدة" onClose={() => setNewOpen(false)}>
@@ -1441,6 +1448,9 @@ function Main({ user }) {
           </label>
         </div>
         <label className="field"><span>رقم الهاتف</span><input className="input ltr" inputMode="tel" value={nc.phone} onChange={(e) => setNc({ ...nc, phone: e.target.value })} /></label>
+        
+        <label className="field"><span>الشكوى الرئيسية (اختياري)</span><textarea className="input" value={nc.chief} onChange={(e) => setNc({ ...nc, chief: e.target.value })} placeholder="مثال: ألم بالسن" /></label>
+
         <label className="field"><span>المادة</span>
           <select className="input" value={nc.subject} onChange={(e) => setNc({ ...nc, subject: e.target.value })}>
             <option value="">— اختر —</option>
@@ -1487,20 +1497,24 @@ function Main({ user }) {
     try { await sendPasswordResetEmail(auth, user.email); setPwWait(60); flash('تم إرسال رسالة التحقق ✓ تفقد الإيميل (وSpam)'); } catch (e) { flash(authError(e.code)); }
   };
 
-  /* الحجز الإلكتروني */
+  /* الحجز الإلكتروني واليدوي */
   const bookLink = `${window.location.origin}/?book=${user.uid}`;
+  
+  // قبول حجز أونلاين وتحويله لقائمة الحجوزات
   const acceptBooking = async (b) => {
     try {
-      const cid = doc(collection(db, 'cases')).id;
-      await setDoc(doc(db, 'cases', cid), {
-        studentId: user.uid, name: b.name, phone: b.phone || '', chief: b.note || '', age: '', gender: '', address: '', subject: '',
-        status: 'active', date: b.date, apptDate: b.date, apptTime: b.time, createdAt: Date.now(), teeth: {}, visits: [], source: 'online',
+      const batch = writeBatch(db);
+      const aid = doc(collection(db, 'appointments')).id;
+      batch.set(doc(db, 'appointments', aid), {
+        studentId: user.uid, name: b.name, phone: b.phone || '', chief: b.note || '',
+        date: b.date, time: b.time, createdAt: Date.now(), source: 'online'
       });
-      await deleteDoc(doc(db, 'public_bookings', b.id));
-      flash('تم قبول الحجز وأُنشئت ورقة الحالة ✓');
-      openCaseById(cid);
+      batch.delete(doc(db, 'public_bookings', b.id));
+      await batch.commit();
+      flash('تم قبول الحجز ونقله لقائمة الحجوزات المؤكدة ✓');
     } catch (e) { flash('ما انقبل، تأكد من الإنترنت'); }
   };
+
   const rejectBooking = async (b) => {
     if (!(await askConfirm('رفض هذا الطلب؟ سيرجع الوقت متاحاً للآخرين.', 'رفض'))) return;
     try {
@@ -1508,6 +1522,34 @@ function Main({ user }) {
       await deleteDoc(doc(db, 'public_bookings', b.id));
     } catch (e) { flash('ما انرفض'); }
   };
+
+  const saveManualBooking = async () => {
+    if(!newApptData.name.trim() || !newApptData.date || !newApptData.time) { flash('أكمل الاسم والتاريخ والوقت'); return; }
+    setBusy(true);
+    try {
+      const batch = writeBatch(db);
+      const aid = doc(collection(db, 'appointments')).id;
+      batch.set(doc(db, 'appointments', aid), {
+        studentId: user.uid, name: newApptData.name.trim(), phone: normIraqPhone(newApptData.phone) || newApptData.phone, chief: newApptData.note.trim(),
+        date: newApptData.date, time: newApptData.time, createdAt: Date.now(), source: 'manual'
+      });
+      batch.set(doc(db, 'public_slots', slotId(user.uid, newApptData.date, newApptData.time)), { studentId: user.uid, date: newApptData.date, time: newApptData.time });
+      await batch.commit();
+      setNewApptOpen(false); setNewApptData({ name: '', phone: '', note: '', date: todayStr(), time: STUDENT_TIMES[0] }); flash('تم إضافة الحجز بنجاح ✓');
+    } catch (e) { flash('حدث خطأ بالاتصال، حاول مجدداً'); }
+    setBusy(false);
+  };
+
+  const deleteAppointment = async (a) => {
+    if (!(await askConfirm('إلغاء هذا الحجز المؤكد وحذف الموعد؟', 'إلغاء الحجز'))) return;
+    try {
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'appointments', a.id));
+      batch.delete(doc(db, 'public_slots', slotId(user.uid, a.date, a.time)));
+      await batch.commit();
+    } catch(e) { flash('حدث خطأ'); }
+  };
+
   const copyLink = async () => { try { await navigator.clipboard.writeText(bookLink); saveStudent({ linkShared: true }).catch(() => {}); flash('تم نسخ الرابط ✓'); } catch (e) { flash('انسخ الرابط يدوياً'); } };
 
   /* نسخ احتياطي */
@@ -1586,8 +1628,9 @@ function Main({ user }) {
   const latest = cases[0];
   const closest = stats.per.filter((s) => s.done < s.required).sort((a, b) => (a.required - a.done) - (b.required - b.done)).slice(0, 3);
   const today = todayStr();
-  const todayCount = cases.filter((c) => c.apptDate === today || (c.visits || []).some((v) => v.date === today)).length;
-  const upcoming = cases.filter((c) => c.apptDate && c.apptDate >= today && c.status !== 'done').sort((a, b) => (a.apptDate + a.apptTime).localeCompare(b.apptDate + b.apptTime)).slice(0, 5);
+  const todayCount = cases.filter((c) => c.date === today || (c.visits || []).some((v) => v.date === today)).length;
+  // عرض المواعيد القادمة من جدول الحجوزات المؤكدة
+  const upcoming = appointments.filter((a) => a.date >= today).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).slice(0, 5);
   const remaining = stats.totalReq - stats.totalDone;
   const list = cases.filter((c) => (filter === 'all' || (filter === 'done' ? c.status === 'done' : c.status !== 'done')) && (!search.trim() || (c.name || '').includes(search.trim())));
   const sName = (id) => (subjects.find((s) => s.id === id) || {}).name || 'بدون مادة';
@@ -1596,7 +1639,7 @@ function Main({ user }) {
     { t: 'أضف أول مريض', d: 'اضغط ＋ وأنشئ حالة جديدة', ok: cases.length > 0, go: () => openNewSheet(null) },
     { t: 'سجّل حالة سن بالخريطة', d: 'افتح حالة ← الأسنان ← اضغط على سن', ok: cases.some((c) => Object.keys(c.teeth || {}).length > 0), go: () => (cases[0] ? openCaseById(cases[0].id) : openNewSheet(null)) },
     { t: 'اكتب اسم جامعتك', d: 'من الإعدادات', ok: !!(student && (student.university || '').trim()), go: () => setView('settings') },
-    { t: 'شارك رابط الحجز مع مرضاك', d: 'من تبويب التقويم', ok: !!(student && student.linkShared), go: () => setView('bookings') },
+    { t: 'شارك رابط الحجز مع مرضاك', d: 'من تبويب الحجوزات', ok: !!(student && student.linkShared), go: () => setView('bookings') },
   ];
   const guideDone = guideSteps.filter((x) => x.ok).length;
   const showGuide = !!student && !student.hideGuide && guideDone < guideSteps.length;
@@ -1633,7 +1676,7 @@ function Main({ user }) {
           {showGuide && (
             <div className="card stack">
               <div className="row between"><h3>🚀 ابدأ بـ Sestemy College</h3><button className="link" onClick={() => saveStudent({ hideGuide: true }).catch(() => {})}>إخفاء</button></div>
-              <Progress value={guideDone} max={guideSteps.length} />
+              <Progress max={guideSteps.length} value={guideDone} />
               <div>
                 {guideSteps.map((st) => (
                   <button key={st.t} className="item" onClick={st.go} disabled={st.ok}>
@@ -1652,12 +1695,12 @@ function Main({ user }) {
 
           {upcoming.length > 0 && (
             <div className="card">
-              <div className="row between"><h3>مواعيدي القادمة</h3></div>
-              {upcoming.map((c) => (
-                <button key={c.id} className="item" onClick={() => openCaseById(c.id)}>
-                  <div className="avatar">{(c.name || '?').charAt(0)}</div>
-                  <div className="grow"><div className="bold">{c.name}</div><div className="small muted bold ltr" style={{ textAlign: 'right' }}>{c.apptDate} · {c.apptTime}</div></div>
-                  <span className="chip work">موعد</span>
+              <div className="row between"><h3>مواعيدي القادمة</h3><button className="link" onClick={() => setView('bookings')}>الكل</button></div>
+              {upcoming.map((a) => (
+                <button key={a.id} className="item" onClick={() => setView('bookings')}>
+                  <div className="avatar">{(a.name || '?').charAt(0)}</div>
+                  <div className="grow"><div className="bold">{a.name}</div><div className="small muted bold ltr" style={{ textAlign: 'right' }}>{a.date} · {a.time}</div></div>
+                  <span className="chip work">حجز</span>
                 </button>
               ))}
             </div>
@@ -1679,7 +1722,7 @@ function Main({ user }) {
             {closest.length === 0 ? <div className="empty">أكملت كل المتطلبات 🎉</div> : closest.map((s) => (
               <div key={s.id} style={{ marginBottom: 12 }}>
                 <div className="row between small bold" style={{ marginBottom: 4 }}><span>{s.name}</span><span className="muted">{s.done} من {s.required}</span></div>
-                <Progress value={s.done} max={s.required} />
+                <Progress max={s.required} value={s.done} />
               </div>
             ))}
           </div>
@@ -1714,32 +1757,83 @@ function Main({ user }) {
 
       {view === 'bookings' && (
         <>
-          <h2>طلبات الحجز</h2>
+          <div className="row between">
+            <h2>الحجوزات</h2>
+            <button className="btn small" onClick={() => setNewApptOpen(true)}>+ حجز يدوي</button>
+          </div>
+
+          <div className="card stack">
+            <h3>قائمة الحجوزات المؤكدة والقادمة ({appointments.length})</h3>
+            <p className="hint">عند حضور المراجع، اضغط <b>(استلام)</b> لفتح ورقة رسمية (طبلة) له.</p>
+            {appointments.length === 0 ? <div className="empty">لا توجد حجوزات مؤكدة حالياً</div> : appointments.map((a) => (
+              <div key={a.id} className="item" style={{ alignItems: 'flex-start' }}>
+                <div className="grow">
+                  <div className="bold">{a.name}</div>
+                  <div className="small muted bold ltr" style={{ textAlign: 'right' }}>{a.phone}</div>
+                  {a.chief && <div className="small muted bold">الشكوى: {a.chief}</div>}
+                </div>
+                <div className="stack" style={{ alignItems: 'flex-end', gap: 6, minWidth: 100 }}>
+                  <span className="chip work ltr" style={{ width: '100%', textAlign: 'center' }}>{a.date} · {a.time}</span>
+                  <div className="row" style={{ width: '100%', justifyContent: 'space-between' }}>
+                    <button className="btn danger small" style={{ flex: 1, padding: '4px 0' }} onClick={() => deleteAppointment(a)}>إلغاء</button>
+                    <button className="btn small" style={{ flex: 2, padding: '4px 0' }} onClick={() => openNewSheet(null, a)}>استلام</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="card stack">
+            <div className="row between">
+              <h3>طلبات الحجز الإلكتروني</h3>
+              {bookings.length > 0 && <span className="badge">{bookings.length} جديد</span>}
+            </div>
+            {bookings.length === 0 ? <div className="empty" style={{ padding: '10px 0' }}>ما موجودة طلبات حجز حالياً</div> : bookings.map((b) => (
+              <div key={b.id} className="card stack" style={{ background: 'var(--brand-soft)', boxShadow: 'none' }}>
+                <div className="row between">
+                  <div><div className="bold" style={{ fontSize: 17 }}>{b.name}</div><div className="small muted bold ltr" style={{ textAlign: 'right' }}>{b.phone}</div></div>
+                  <span className="chip work ltr">{b.date} · {b.time}</span>
+                </div>
+                {b.note ? <p className="muted bold small">المشكلة: {b.note}</p> : null}
+                <div className="row">
+                  <button className="btn danger grow" onClick={() => rejectBooking(b)}>رفض</button>
+                  <a className="btn soft" href={'tel:' + telNumber(b.phone)}>📞</a>
+                  <a className="btn soft" href={'https://wa.me/' + waNumber(b.phone)} target="_blank" rel="noreferrer">واتس</a>
+                  <button className="btn grow" onClick={() => acceptBooking(b)}>قبول ونقل للحجوزات</button>
+                </div>
+              </div>
+            ))}
+          </div>
+
           <div className="card stack">
             <h3>رابط الحجز الخاص بك</h3>
-            <p className="hint">أرسل هذا الرابط للمرضى. يحجزون بأحد أوقاتك الثلاثة (8:30، 10:30، 12:30) من غير تسجيل دخول.</p>
+            <p className="hint">أرسل هذا الرابط للمرضى ليتمكنوا من الحجز المباشر (من السبت للخميس).</p>
             <div className="input ltr small" style={{ wordBreak: 'break-all' }}>{bookLink}</div>
             <div className="grid2">
               <button className="btn soft" onClick={copyLink}>نسخ الرابط</button>
               <a className="btn" href={`https://wa.me/?text=${encodeURIComponent('احجز موعد علاج عندي من هذا الرابط: ' + bookLink)}`} target="_blank" rel="noreferrer">مشاركة واتساب</a>
             </div>
           </div>
-          {bookings.length === 0 ? <div className="card empty">ما موجودة طلبات حجز حالياً</div> : bookings.map((b) => (
-            <div key={b.id} className="card stack">
-              <div className="row between">
-                <div><div className="bold" style={{ fontSize: 17 }}>{b.name}</div><div className="small muted bold ltr" style={{ textAlign: 'right' }}>{b.phone}</div></div>
-                <span className="chip work ltr">{b.date} · {b.time}</span>
-              </div>
-              {b.note ? <p className="muted bold small">المشكلة: {b.note}</p> : null}
-              <div className="row">
-                <button className="btn danger grow" onClick={() => rejectBooking(b)}>رفض</button>
-                <a className="btn soft" href={'tel:' + telNumber(b.phone)}>📞</a>
-                <a className="btn soft" href={'https://wa.me/' + waNumber(b.phone)} target="_blank" rel="noreferrer">واتساب</a>
-                <button className="btn grow" onClick={() => acceptBooking(b)}>قبول</button>
-              </div>
-            </div>
-          ))}
         </>
+      )}
+
+      {newApptOpen && (
+        <Sheet title="إضافة حجز يدوي" onClose={() => setNewApptOpen(false)}>
+          <div className="stack">
+            <label className="field"><span>اسم المراجع</span><input className="input" value={newApptData.name} onChange={(e) => setNewApptData({...newApptData, name: e.target.value})} placeholder="الاسم الكامل" /></label>
+            <label className="field"><span>رقم الهاتف</span><input className="input ltr" inputMode="tel" value={newApptData.phone} onChange={(e) => setNewApptData({...newApptData, phone: e.target.value})} placeholder="0770..." /></label>
+            <label className="field"><span>الشكوى أو السبب (اختياري)</span><textarea className="input" value={newApptData.note} onChange={(e) => setNewApptData({...newApptData, note: e.target.value})} placeholder="مثال: حشوة تجميلية للسن الأمامي" /></label>
+            <div className="grid2">
+              <label className="field"><span>التاريخ</span><input className="input" type="date" value={newApptData.date} onChange={(e) => setNewApptData({...newApptData, date: e.target.value})} /></label>
+              <label className="field"><span>الوقت</span>
+                <select className="input" value={newApptData.time} onChange={(e) => setNewApptData({...newApptData, time: e.target.value})}>
+                  {STUDENT_TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </label>
+            </div>
+            <button className="btn block" onClick={saveManualBooking} disabled={busy}>{busy ? '...' : 'حفظ الحجز'}</button>
+          </div>
+        </Sheet>
       )}
 
       {view === 'subjects' && (
@@ -1750,7 +1844,7 @@ function Main({ user }) {
             <div className="subjgrid">
               {stats.per.map((s) => (
                 <button key={s.id} className="card subj" onClick={() => setEditSubj({ ...s })}>
-                  <Ring value={s.done} max={s.required} />
+                  <Ring max={s.required} value={s.done} />
                   <b>{s.name}</b>
                   <span className="hint">{s.done} من {s.required}</span>
                 </button>
