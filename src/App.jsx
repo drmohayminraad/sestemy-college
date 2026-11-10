@@ -109,6 +109,14 @@ const waNumber = (v) => {
   return d;
 };
 
+// رقم عراقي: يقبل 0770... أو 770... أو +964 أو بالأرقام العربية، ويُحفظ بصيغة 07XXXXXXXXX
+const normIraqPhone = (v) => {
+  let d = latinDigits(v).replace(/\D/g, '');
+  if (d.startsWith('00964')) d = d.slice(5); else if (d.startsWith('964')) d = d.slice(3);
+  if (d.length === 10 && d.startsWith('7')) d = '0' + d;
+  return /^07\d{9}$/.test(d) ? d : '';
+};
+
 const authError = (code) => ({
   'auth/invalid-email': 'الإيميل غير صحيح',
   'auth/missing-password': 'اكتب كلمة المرور',
@@ -351,12 +359,13 @@ function PublicBooking({ id }) {
     setErr('');
     if (!date || !time) { setErr('اختر اليوم والوقت'); return; }
     if (!name.trim()) { setErr('اكتب اسمك'); return; }
-    if (phone.replace(/\D/g, '').length < 7) { setErr('اكتب رقم هاتف صحيح'); return; }
+    const ph = normIraqPhone(phone);
+    if (!ph) { setErr('اكتب رقم هاتفك مثل 07701234567'); return; }
     setBusy(true);
     try {
       const batch = writeBatch(db);
       batch.set(doc(db, 'public_slots', slotId(id, date, time)), { studentId: id, date, time });
-      batch.set(doc(collection(db, 'public_bookings')), { studentId: id, name: name.trim(), phone: phone.trim(), date, time, note: note.trim(), createdAt: new Date().toISOString() });
+      batch.set(doc(collection(db, 'public_bookings')), { studentId: id, name: name.trim(), phone: ph, date, time, note: note.trim(), createdAt: new Date().toISOString() });
       await batch.commit();
       setDone(true);
     } catch (e2) {
@@ -412,7 +421,7 @@ function PublicBooking({ id }) {
         </div>
         <div className="card stack">
           <label className="field"><span>اسمك</span><input className="input" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" /></label>
-          <label className="field"><span>رقم الهاتف</span><input className="input ltr" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" /></label>
+          <label className="field"><span>رقم الهاتف</span><input className="input ltr" inputMode="tel" maxLength={24} placeholder="07701234567" value={phone} onChange={(e) => setPhone(latinDigits(e.target.value))} autoComplete="tel" /><span className="hint" style={{ display: 'block', marginTop: 5 }}>اكتب رقمك مثل 07701234567، بدون مفتاح الدولة</span></label>
           <label className="field"><span>شنو مشكلتك؟ (اختياري)</span><textarea className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="مثال: ألم بالضرس السفلي" /></label>
           {err && <div className="msg err">{err}</div>}
           <button className="btn block" disabled={busy}>{busy ? '...' : 'إرسال طلب الحجز'}</button>
@@ -520,13 +529,22 @@ const canalSummary = (t) => (t.canalList && t.canalList.length ? t.canalList.map
 const toothExtra = (t) => [t.vitality, canalSummary(t), t.restorations && t.restorations.length ? t.restorations.join(' + ') : ''].filter(Boolean).join(' · ');
 const hasToothInfo = (t) => !!(t.notes || t.vitality || t.wl || (t.canalList && t.canalList.length) || (t.restorations && t.restorations.length));
 
-/* ---------- قائمة منبثقة للاختيار: واحد (قائمة) أو أكثر (نافذة بعلامات ✓) بدون كتابة ---------- */
-function PopupPicker({ options, value, onChange, multi, placeholder, title, openSignal }) {
+/* ---------- قائمة منبثقة للاختيار: واحد (قائمة) أو أكثر (نافذة بعلامات ✓) + كتابة نوع آخر ---------- */
+function PopupPicker({ options, value, onChange, multi, placeholder, title, openSignal, allowCustom }) {
   const [open, setOpen] = useState(false);
+  const [custom, setCustom] = useState('');
   useEffect(() => { if (openSignal) setOpen(true); }, [openSignal]);
   const sel = multi ? (value || []) : (value ? [value] : []);
-  const toggle = (o) => onChange(sel.includes(o) ? sel.filter((x) => x !== o) : [...sel, o].sort((a, b) => options.indexOf(a) - options.indexOf(b)));
+  const rank = (x) => { const i = options.indexOf(x); return i < 0 ? 999 : i; };
+  const toggle = (o) => onChange(sel.includes(o) ? sel.filter((x) => x !== o) : [...sel, o].sort((a, b) => rank(a) - rank(b)));
   const remove = (o) => onChange(multi ? sel.filter((x) => x !== o) : '');
+  const addCustom = () => {
+    const v = custom.trim();
+    if (!v) return;
+    if (!sel.includes(v)) onChange([...sel, v].sort((a, b) => rank(a) - rank(b)));
+    setCustom('');
+  };
+  const listed = [...options, ...sel.filter((x) => !options.includes(x))];
   return (
     <div className="picker">
       <div className="picked">
@@ -544,12 +562,18 @@ function PopupPicker({ options, value, onChange, multi, placeholder, title, open
         <div className="pick-ov" onClick={() => setOpen(false)}>
           <div className="pick-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="head"><h2>{title || 'اختر الأنواع'}</h2><button type="button" className="x" onClick={() => setOpen(false)}>✕</button></div>
-            <p className="hint" style={{ marginBottom: 6 }}>اضغط على الأنواع لاختيارها أو إلغائها، تكدر تختار أكثر من نوع</p>
-            {options.map((o) => (
+            <p className="hint" style={{ marginBottom: 6 }}>اضغط على الأنواع لاختيارها أو إلغائها، تكدر تختار أكثر من نوع{allowCustom ? '، أو تكتب نوع ثاني' : ''}</p>
+            {listed.map((o) => (
               <button type="button" key={o} className={'opt' + (sel.includes(o) ? ' on' : '')} onClick={() => toggle(o)}>
                 <span className="box">{sel.includes(o) ? '✓' : ''}</span>{o}
               </button>
             ))}
+            {allowCustom && (
+              <div className="row" style={{ marginTop: 12 }}>
+                <input className="input grow ltr" value={custom} placeholder="اكتب نوعاً آخر (مثلاً Amalgam)" onChange={(e) => setCustom(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustom(); } }} />
+                <button type="button" className="btn soft" onClick={addCustom}>＋ إضافة</button>
+              </div>
+            )}
             <button type="button" className="btn block" style={{ marginTop: 14 }} onClick={() => setOpen(false)}>تم ({sel.length})</button>
           </div>
         </div>, document.body)}
@@ -620,8 +644,8 @@ function SubjectFields({ subject, v, set }) {
     return (
       <div className="stack">
         <h3>Restoration Type</h3>
-        <p className="hint">اختر من القائمة نوع واحد أو أكثر، وتكدر تمسح أي نوع بعلامة ✕</p>
-        <PopupPicker multi options={FILLING_CLASSES} value={v.fillingClasses || []} onChange={(val) => set('fillingClasses', val)} placeholder="اختر نوع الحشوة" />
+        <p className="hint">اختر نوع واحد أو أكثر، أو اكتب نوعاً ثانياً، وتكدر تمسح أي نوع بعلامة ✕</p>
+        <PopupPicker multi allowCustom options={FILLING_CLASSES} value={v.fillingClasses || []} onChange={(val) => set('fillingClasses', val)} placeholder="اختر نوع الحشوة" />
       </div>
     );
   }
@@ -819,7 +843,7 @@ function CaseDetail({ c, subjects, onBack, save, remove, flash, onNewSheet, done
 
   const pickTooth = (n) => {
     const t = teeth[n] || {};
-    setTooth(n); setCond(t.condition || 'caries'); setNotes(t.notes || '');
+    setPickSignal(0); setTooth(n); setCond(t.condition || 'caries'); setNotes(t.notes || '');
     setTv(t.vitality || ''); setTcurv(t.curvature || ''); setTobt(t.obturation || '');
     setTrest(t.restorations ? [...t.restorations] : []);
     if (t.canalList) setTcanals(t.canalList.map((x) => ({ ...x })));
@@ -1036,7 +1060,7 @@ function CaseDetail({ c, subjects, onBack, save, remove, flash, onNewSheet, done
             {cond === 'filled' && (
               <div className="card stack" style={{ boxShadow: 'none', background: 'var(--brand-soft)' }}>
                 <h3>Restoration Type</h3>
-                <PopupPicker multi options={FILLING_CLASSES} value={trest} onChange={setTrest} placeholder="اختر نوع الحشوة" title="Restoration Type" openSignal={pickSignal} />
+                <PopupPicker multi allowCustom options={FILLING_CLASSES} value={trest} onChange={setTrest} placeholder="اختر نوع الحشوة" title="Restoration Type" openSignal={pickSignal} />
               </div>
             )}
             <label className="field"><span>ملاحظة</span><textarea className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="مثال: composite class I" /></label>
