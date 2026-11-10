@@ -46,8 +46,7 @@ const PRIM_LOW = [85, 84, 83, 82, 81, 71, 72, 73, 74, 75];
 const SHEET_FIELDS = ['name', 'age', 'gender', 'phone', 'address', 'subject', 'date', 'chief', 'presentIllness', 'medicalHistory', 'dentalHistory', 'examination', 'diagnosis', 'fillingClasses', 'perioSeverity', 'calScore'];
 
 const STUDENT_TIMES = ['08:30 صباحاً', '10:30 صباحاً', '12:30 ظهراً'];
-// تم التعديل: العطلة يوم الجمعة فقط
-const OFF_DAYS = [5]; 
+const OFF_DAYS = [5]; // الجمعة عطلة فقط
 const SUPER_EMAIL = 'wsx67hb@gmail.com';
 const SUPPORT_WA = '9647719667763';
 const PLANS = ['تجربة مجانية', 'اشتراك شهري', 'اشتراك 3 أشهر', 'اشتراك سنوي'];
@@ -317,7 +316,7 @@ function AuthScreen() {
   );
 }
 
-/* ---------- صفحة الحجز العامة (بدون تسجيل دخول) ---------- */
+/* ---------- صفحة الحجز العامة ---------- */
 function PublicBooking({ id }) {
   const [info, setInfo] = useState(undefined);
   const [taken, setTaken] = useState([]);
@@ -565,7 +564,6 @@ function PopupPicker({ options, value, onChange, multi, placeholder, title, open
   );
 }
 
-/* ---------- قفل التطبيق بـ Face ID / Touch ID / رمز الجهاز (WebAuthn) ---------- */
 const lockKey = (uid) => 'sc_lock_' + uid;
 const getLock = (uid) => { try { return JSON.parse(localStorage.getItem(lockKey(uid)) || 'null'); } catch (e) { return null; } };
 const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -646,7 +644,6 @@ function SubjectFields({ subject, v, set }) {
   return null;
 }
 
-/* ---------- الصور: ضغط بنفس آلية Sestemy ---------- */
 const loadImg = (file) => new Promise((resolve, reject) => {
   const r = new FileReader();
   r.onerror = reject;
@@ -660,7 +657,6 @@ const shrink = (img, max, q) => {
   c.getContext('2d').drawImage(img, 0, 0, w, h);
   return { url: c.toDataURL('image/jpeg', q), w, h };
 };
-// صورة كاملة (حتى 1200px بجودة 0.85) + مصغّرة للشبكة. وإذا طلعت كبيرة نخفّض الجودة تلقائياً
 const compressPhoto = async (file) => {
   const img = await loadImg(file);
   let max = 1200, q = 0.85;
@@ -765,7 +761,6 @@ function PhotosTab({ c, uid, flash }) {
   );
 }
 
-/* ---------- تفاصيل الحالة ---------- */
 function CaseDetail({ c, subjects, onBack, save, remove, flash, onNewSheet, doneInfo, celebrate }) {
   const [tab, setTab] = useState('sheet');
   const [d, setD] = useState(() => pickSheet(c));
@@ -791,7 +786,6 @@ function CaseDetail({ c, subjects, onBack, save, remove, flash, onNewSheet, done
   const visits = [...(c.visits || [])].sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')));
   const set = (k, v) => { verRef.current += 1; setD((p) => ({ ...p, [k]: v })); setDirty(true); };
 
-  // حفظ تلقائي بعد ثانية ونصف من آخر تعديل
   useEffect(() => {
     if (!dirty || !d.name.trim()) return;
     const v = verRef.current;
@@ -1087,7 +1081,6 @@ function CaseDetail({ c, subjects, onBack, save, remove, flash, onNewSheet, done
   );
 }
 
-/* ---------- شاشة الحساب الموقوف / المنتهي ---------- */
 function LockedScreen({ expired }) {
   return (
     <div className="center">
@@ -1102,7 +1095,6 @@ function LockedScreen({ expired }) {
   );
 }
 
-/* ---------- لوحة الإدارة العليا (لإيميل المدير فقط) ---------- */
 const daysLeftOf = (end) => {
   if (!end) return null;
   const t = new Date(); t.setHours(0, 0, 0, 0);
@@ -1235,21 +1227,20 @@ function SuperAdmin({ flash }) {
 }
 
 /* ---------- التطبيق بعد تسجيل الدخول ---------- */
-// تم إضافة chief و apptId لتجهيز الحالة عند الاستلام
-const BLANK_NC = { name: '', age: '', gender: '', phone: '', address: '', subject: '', fillingClasses: [], perioSeverity: '', calScore: '', chief: '', apptId: null };
+const BLANK_NC = { name: '', age: '', gender: '', phone: '', address: '', subject: '', fillingClasses: [], perioSeverity: '', calScore: '', chief: '', apptId: null, apptDate: null, apptTime: null };
 
 function Main({ user }) {
   const [student, setStudent] = useState(null);
   const [cases, setCases] = useState([]);
   const [bookings, setBookings] = useState([]);
-  const [appointments, setAppointments] = useState([]); // قائمة الحجوزات المؤكدة الجديدة
+  const [appointments, setAppointments] = useState([]); 
   const [view, setView] = useState('home');
   const [openId, setOpenId] = useState(null);
   const [newOpen, setNewOpen] = useState(false);
   
   // خاص بحجز يدوي جديد
   const [newApptOpen, setNewApptOpen] = useState(false);
-  const [newApptData, setNewApptData] = useState({ name: '', phone: '', note: '', date: todayStr(), time: STUDENT_TIMES[0] });
+  const [newApptData, setNewApptData] = useState({ name: '', phone: '', note: '', date: todayStr(), time: '' });
 
   const [toast, setToast] = useState('');
   const [search, setSearch] = useState('');
@@ -1272,7 +1263,6 @@ function Main({ user }) {
   const flash = (t) => { setToast(t); setTimeout(() => setToast(''), 2400); };
   const celebrate = (m) => { setParty(m); setTimeout(() => setParty(null), 3800); };
 
-  // قفل التطبيق
   useEffect(() => { lockSupported().then(setLockOk); }, []);
   useEffect(() => {
     let hiddenAt = 0;
@@ -1285,7 +1275,6 @@ function Main({ user }) {
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [user.uid]);
 
-  // زر الرجوع بالموبايل
   useEffect(() => {
     const onPop = (e) => setOpenId(e.state && e.state.open ? e.state.open : null);
     window.addEventListener('popstate', onPop);
@@ -1317,12 +1306,44 @@ function Main({ user }) {
     const unsub3 = onSnapshot(query(collection(db, 'public_bookings'), where('studentId', '==', user.uid)), (snap) => {
       setBookings(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)));
     }, () => {});
-    // جلب الحجوزات المؤكدة واليدوية الجديدة
     const unsub4 = onSnapshot(query(collection(db, 'appointments'), where('studentId', '==', user.uid)), (snap) => {
       setAppointments(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)));
     }, () => {});
     return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
   }, [user.uid]);
+
+  // خوارزمية التنظيف الذكي لإزالة "الحجوزات الشبحية" وتأمين الأوقات (المزامنة الشاملة)
+  useEffect(() => {
+    if (!user || !user.uid) return;
+    const t = setTimeout(async () => {
+      try {
+        const valid = new Map();
+        appointments.forEach(a => { if(a.date && a.time) valid.set(slotId(user.uid, a.date, a.time), { date: a.date, time: a.time }); });
+        bookings.forEach(b => { if(b.date && b.time) valid.set(slotId(user.uid, b.date, b.time), { date: b.date, time: b.time }); });
+        cases.forEach(c => { if(c.status !== 'done' && c.apptDate && c.apptTime) valid.set(slotId(user.uid, c.apptDate, c.apptTime), { date: c.apptDate, time: c.apptTime }); });
+        
+        const snap = await getDocs(query(collection(db, 'public_slots'), where('studentId', '==', user.uid)));
+        const b = writeBatch(db);
+        let ops = 0;
+        
+        const existing = new Set();
+        snap.docs.forEach(d => {
+          if (!valid.has(d.id)) { b.delete(d.ref); ops++; }
+          else { existing.add(d.id); }
+        });
+        
+        valid.forEach((val, key) => {
+          if (!existing.has(key)) {
+            b.set(doc(db, 'public_slots', key), { studentId: user.uid, date: val.date, time: val.time });
+            ops++;
+          }
+        });
+
+        if (ops > 0) await b.commit();
+      } catch(e) {}
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [appointments, bookings, cases, user.uid]);
 
   useEffect(() => {
     if (pwWait <= 0) return;
@@ -1390,7 +1411,6 @@ function Main({ user }) {
         }
       } catch (err) {}
       await deleteDoc(doc(db, 'cases', id));
-      // لا نمسح الحجز من public_slots هنا حتى لو انحذفت الحالة، أو حسب الحاجة
       closeCase();
     } catch (e) { flash('ما انحذفت'); }
   };
@@ -1408,31 +1428,34 @@ function Main({ user }) {
     setBusy(true);
     try {
       const id = doc(collection(db, 'cases')).id;
-      await setDoc(doc(db, 'cases', id), {
+      const batch = writeBatch(db);
+      
+      batch.set(doc(db, 'cases', id), {
         studentId: user.uid, name: nc.name.trim(), age: nc.age, gender: nc.gender, phone: nc.phone, address: nc.address, subject: nc.subject,
         chief: nc.chief || '',
         fillingClasses: nc.fillingClasses || [], perioSeverity: nc.perioSeverity || '', calScore: nc.calScore || '',
-        status: 'active', date: todayStr(), createdAt: Date.now(), teeth: {}, visits: [],
+        status: 'active', date: todayStr(), apptDate: nc.apptDate || todayStr(), apptTime: nc.apptTime || '', createdAt: Date.now(), teeth: {}, visits: [],
       });
       
-      // إذا كان هذا تسجيل استلام لحجز، نمسح الحجز من قائمة الحجوزات
       if (nc.apptId) {
-        await deleteDoc(doc(db, 'appointments', nc.apptId)).catch(()=>{});
+        batch.delete(doc(db, 'appointments', nc.apptId));
       }
+      await batch.commit();
 
       setNewOpen(false); setNc(BLANK_NC); openCaseById(id);
     } catch (e) { flash('ما انحفظت الحالة، تأكد من الإنترنت'); }
     setBusy(false);
   };
   
-  // دالة ذكية تقبل بيانات الحجز وتجهز الورقة فوراً (عملية الاستلام)
   const openNewSheet = (c, appt = null) => { 
     setNc({ 
       ...BLANK_NC, 
       name: c ? c.name || '' : (appt ? appt.name : ''), 
       phone: c ? c.phone || '' : (appt ? appt.phone : ''), 
       chief: appt ? appt.chief : '',
-      apptId: appt ? appt.id : null 
+      apptId: appt ? appt.id : null,
+      apptDate: appt ? appt.date : null,
+      apptTime: appt ? appt.time : null
     }); 
     setNewOpen(true); 
   };
@@ -1497,10 +1520,8 @@ function Main({ user }) {
     try { await sendPasswordResetEmail(auth, user.email); setPwWait(60); flash('تم إرسال رسالة التحقق ✓ تفقد الإيميل (وSpam)'); } catch (e) { flash(authError(e.code)); }
   };
 
-  /* الحجز الإلكتروني واليدوي */
   const bookLink = `${window.location.origin}/?book=${user.uid}`;
   
-  // قبول حجز أونلاين وتحويله لقائمة الحجوزات
   const acceptBooking = async (b) => {
     try {
       const batch = writeBatch(db);
@@ -1518,10 +1539,22 @@ function Main({ user }) {
   const rejectBooking = async (b) => {
     if (!(await askConfirm('رفض هذا الطلب؟ سيرجع الوقت متاحاً للآخرين.', 'رفض'))) return;
     try {
-      await deleteDoc(doc(db, 'public_slots', slotId(user.uid, b.date, b.time)));
-      await deleteDoc(doc(db, 'public_bookings', b.id));
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'public_slots', slotId(user.uid, b.date, b.time)));
+      batch.delete(doc(db, 'public_bookings', b.id));
+      await batch.commit();
     } catch (e) { flash('ما انرفض'); }
   };
+
+  const getAvailableManualTimes = () => {
+    if (!newApptData.date) return [];
+    const t1 = appointments.filter(a => a.date === newApptData.date).map(a => a.time);
+    const t2 = bookings.filter(b => b.date === newApptData.date).map(b => b.time);
+    const t3 = cases.filter(c => c.apptDate === newApptData.date && c.status !== 'done').map(c => c.apptTime);
+    const all = [...t1, ...t2, ...t3].filter(Boolean);
+    return STUDENT_TIMES.filter(t => !all.includes(t));
+  };
+  const manualTimes = getAvailableManualTimes();
 
   const saveManualBooking = async () => {
     if(!newApptData.name.trim() || !newApptData.date || !newApptData.time) { flash('أكمل الاسم والتاريخ والوقت'); return; }
@@ -1535,7 +1568,7 @@ function Main({ user }) {
       });
       batch.set(doc(db, 'public_slots', slotId(user.uid, newApptData.date, newApptData.time)), { studentId: user.uid, date: newApptData.date, time: newApptData.time });
       await batch.commit();
-      setNewApptOpen(false); setNewApptData({ name: '', phone: '', note: '', date: todayStr(), time: STUDENT_TIMES[0] }); flash('تم إضافة الحجز بنجاح ✓');
+      setNewApptOpen(false); setNewApptData({ name: '', phone: '', note: '', date: todayStr(), time: '' }); flash('تم إضافة الحجز بنجاح ✓');
     } catch (e) { flash('حدث خطأ بالاتصال، حاول مجدداً'); }
     setBusy(false);
   };
@@ -1552,7 +1585,6 @@ function Main({ user }) {
 
   const copyLink = async () => { try { await navigator.clipboard.writeText(bookLink); saveStudent({ linkShared: true }).catch(() => {}); flash('تم نسخ الرابط ✓'); } catch (e) { flash('انسخ الرابط يدوياً'); } };
 
-  /* نسخ احتياطي */
   const exportJson = () => {
     const payload = {
       app: 'sestemy-college', version: 1, exportedAt: new Date().toISOString(),
@@ -1628,8 +1660,8 @@ function Main({ user }) {
   const latest = cases[0];
   const closest = stats.per.filter((s) => s.done < s.required).sort((a, b) => (a.required - a.done) - (b.required - b.done)).slice(0, 3);
   const today = todayStr();
-  const todayCount = cases.filter((c) => c.date === today || (c.visits || []).some((v) => v.date === today)).length;
-  // عرض المواعيد القادمة من جدول الحجوزات المؤكدة
+  const todayCount = cases.filter((c) => (c.apptDate === today && c.status !== 'done') || (c.visits || []).some((v) => v.date === today)).length;
+  
   const upcoming = appointments.filter((a) => a.date >= today).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).slice(0, 5);
   const remaining = stats.totalReq - stats.totalDone;
   const list = cases.filter((c) => (filter === 'all' || (filter === 'done' ? c.status === 'done' : c.status !== 'done')) && (!search.trim() || (c.name || '').includes(search.trim())));
@@ -1827,11 +1859,12 @@ function Main({ user }) {
               <label className="field"><span>التاريخ</span><input className="input" type="date" value={newApptData.date} onChange={(e) => setNewApptData({...newApptData, date: e.target.value})} /></label>
               <label className="field"><span>الوقت</span>
                 <select className="input" value={newApptData.time} onChange={(e) => setNewApptData({...newApptData, time: e.target.value})}>
-                  {STUDENT_TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+                  <option value="">{newApptData.date ? (manualTimes.length > 0 ? 'اختر الوقت...' : 'جميع الأوقات محجوزة بهذا اليوم') : 'حدد التاريخ أولاً'}</option>
+                  {manualTimes.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </label>
             </div>
-            <button className="btn block" onClick={saveManualBooking} disabled={busy}>{busy ? '...' : 'حفظ الحجز'}</button>
+            <button className="btn block" onClick={saveManualBooking} disabled={busy || !newApptData.time}>{busy ? '...' : 'حفظ الحجز'}</button>
           </div>
         </Sheet>
       )}
