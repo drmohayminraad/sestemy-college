@@ -273,8 +273,16 @@ function AuthScreen() {
         await signInWithEmailAndPassword(auth, email.trim(), password);
       } else if (mode === 'register') {
         if (!name.trim()) { setErr('اكتب اسمك'); setBusy(false); return; }
-        const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
-        await setDoc(doc(db, 'students', cred.user.uid), { name: name.trim(), email: email.trim(), university: '', subjects: DEFAULT_SUBJECTS, createdAt: Date.now() }, { merge: true });
+        const cleanEmail = email.trim().toLowerCase();
+        const cleanName = name.trim();
+        const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+        await setDoc(doc(db, 'students', cred.user.uid), { name: cleanName, email: cleanEmail, university: '', subjects: DEFAULT_SUBJECTS, createdAt: Date.now() }, { merge: true });
+
+        // بعد نجاح إنشاء الحساب وحفظ بياناته، افتح واتساب برسالة اشتراك جاهزة.
+        const whatsappMessage = `مرحباً Sestemy، أريد الاشتراك.\nالاسم: ${cleanName}\nالإيميل: ${cleanEmail}`;
+        const whatsappUrl = `https://wa.me/${SUPPORT_WA}?text=${encodeURIComponent(whatsappMessage)}`;
+        window.location.assign(whatsappUrl);
+        return;
       } else {
         await sendPasswordResetEmail(auth, email.trim());
         setInfo('أرسلنا رسالة تحقق إلى إيميلك. افتح الرابط وغيّر كلمة المرور (تفقد Spam إذا ما وصلت).');
