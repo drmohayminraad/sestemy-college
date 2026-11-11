@@ -18,22 +18,23 @@ service cloud.firestore {
             && (get(/databases/$(database)/documents/student_status/$(id)).data.get('expiresAt', null) == null
                 || get(/databases/$(database)/documents/student_status/$(id)).data.get('expiresAt', null) > request.time));
     }
-    // صاحب الحساب وهو فعّال (المدير مستثنى دائماً)
     function ownerOk(id) { return isOwner(id) && (isSuper() || statusOk(id)); }
+    function bookingTimeAllowed(id, time) {
+      return exists(/databases/$(database)/documents/booking_settings/$(id))
+        ? get(/databases/$(database)/documents/booking_settings/$(id)).data.times.hasAny([time])
+        : ['08:30 صباحاً', '10:30 صباحاً', '12:30 ظهراً'].hasAny([time]);
+    }
 
-    // حالة التفعيل والاشتراك: الطالب يقرأ حالته فقط، والكتابة للمدير فقط
     match /student_status/{id} {
       allow read: if isOwner(id) || isSuper();
       allow write: if isSuper();
     }
 
-    // ملف الطالب: صاحبه وهو فعّال. والمدير يقرأ القائمة (بدون أي بيانات مرضى)
     match /students/{id} {
       allow read: if ownerOk(id) || isSuper();
       allow write: if ownerOk(id);
     }
 
-    // حالات الطالب (بيانات المرضى): صاحبها فقط وهو فعّال. حتى المدير لا يقرأها
     match /cases/{caseId} {
       allow read, delete: if signedIn() && resource.data.studentId == request.auth.uid
                           && (isSuper() || statusOk(request.auth.uid));
@@ -44,7 +45,28 @@ service cloud.firestore {
                     && (isSuper() || statusOk(request.auth.uid));
     }
 
-    // نسخة عامة محدودة لصفحة الحجز. الحساب الموقوف أو المنتهي ينغلق رابط حجزه
+    // المواعيد المؤكدة: الطالب الفعّال وحده يدير مواعيده
+    match /appointments/{appointmentId} {
+      allow read, delete: if ownerOk(resource.data.studentId);
+      allow create: if ownerOk(request.resource.data.studentId)
+        && request.resource.data.keys().hasOnly(['studentId','name','phone','chief','date','time','createdAt','source']);
+      allow update: if ownerOk(resource.data.studentId)
+        && request.resource.data.studentId == resource.data.studentId;
+    }
+
+    // إعدادات الجدول: القراءة العامة مطلوبة لعرض الأوقات في رابط الحجز
+    match /booking_settings/{id} {
+      allow get: if statusOk(id);
+      allow list: if false;
+      allow create, update: if ownerOk(id)
+        && request.resource.data.keys().hasOnly(['times','offDays','enabled','updatedAt'])
+        && request.resource.data.times is list
+        && request.resource.data.times.size() > 0
+        && request.resource.data.times.size() <= 12
+        && request.resource.data.offDays is list;
+      allow delete: if ownerOk(id);
+    }
+
     match /public_students/{id} {
       allow get: if statusOk(id);
       allow list: if false;
@@ -54,27 +76,28 @@ service cloud.firestore {
         && request.resource.data.university is string && request.resource.data.university.size() < 150;
     }
 
-    // الأوقات المحجوزة (بدون بيانات شخصية). الإنشاء فقط
     match /public_slots/{slotId} {
       allow read: if true;
       allow create: if request.resource.data.keys().hasOnly(['studentId','date','time'])
         && request.resource.data.studentId is string
         && request.resource.data.date is string && request.resource.data.date.size() < 20
-        && request.resource.data.time is string && request.resource.data.time.size() < 20
+        && request.resource.data.time is string && request.resource.data.time.size() < 30
+        && bookingTimeAllowed(request.resource.data.studentId, request.resource.data.time)
         && exists(/databases/$(database)/documents/public_students/$(request.resource.data.studentId))
         && statusOk(request.resource.data.studentId);
       allow delete: if ownerOk(resource.data.studentId);
     }
 
-    // طلبات الحجز: أي شخص يرسل طلب، والطالب صاحبها فقط يقراها ويحذفها
     match /public_bookings/{id} {
-      allow create: if request.resource.data.keys().hasOnly(['studentId','name','phone','date','time','note','createdAt'])
+      allow create: if request.resource.data.keys().hasOnly(['studentId','name','phone','date','time','note','status','createdAt'])
         && request.resource.data.studentId is string
         && request.resource.data.name is string && request.resource.data.name.size() < 100
         && request.resource.data.phone is string && request.resource.data.phone.size() < 30
         && request.resource.data.date is string && request.resource.data.date.size() < 20
-        && request.resource.data.time is string && request.resource.data.time.size() < 20
+        && request.resource.data.time is string && request.resource.data.time.size() < 30
+        && bookingTimeAllowed(request.resource.data.studentId, request.resource.data.time)
         && request.resource.data.note is string && request.resource.data.note.size() < 500
+        && request.resource.data.status == 'pending'
         && request.resource.data.createdAt is string
         && exists(/databases/$(database)/documents/public_students/$(request.resource.data.studentId))
         && statusOk(request.resource.data.studentId);
